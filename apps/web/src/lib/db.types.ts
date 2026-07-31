@@ -97,6 +97,13 @@ export interface Database {
           deposit_paid_at: string | null;
           balance_paid_at: string | null;
           notes: string | null;
+          // Added by 0005_gigs.sql — external ids and hosted checkout links
+          // for the calendar and payment adapters.
+          calendar_event_id: string | null;
+          deposit_payment_id: string | null;
+          deposit_payment_url: string | null;
+          balance_payment_id: string | null;
+          balance_payment_url: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -114,6 +121,11 @@ export interface Database {
           deposit_paid_at?: string | null;
           balance_paid_at?: string | null;
           notes?: string | null;
+          calendar_event_id?: string | null;
+          deposit_payment_id?: string | null;
+          deposit_payment_url?: string | null;
+          balance_payment_id?: string | null;
+          balance_payment_url?: string | null;
         };
         Update: Partial<
           Omit<Database['public']['Tables']['gigs']['Row'], 'id' | 'created_at'>
