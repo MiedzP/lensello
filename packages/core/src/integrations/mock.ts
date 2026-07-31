@@ -9,9 +9,10 @@
  * `Math.random()`, so screenshots and tests are stable across runs.
  */
 
-import type { AdMetric, DateOnly, Timestamp } from '../types';
+import type { DateOnly, Timestamp } from '../types';
 import type {
   AdManager,
+  AdMetricRow,
   CalendarClient,
   CalendarEvent,
   CreateAdInput,
@@ -140,9 +141,9 @@ class MockAdManager implements AdManager {
     externalIds: readonly string[],
     from: DateOnly,
     to: DateOnly,
-  ): Promise<Omit<AdMetric, 'id' | 'adId'>[]> {
+  ): Promise<AdMetricRow[]> {
     await latency(400);
-    const rows: Omit<AdMetric, 'id' | 'adId'>[] = [];
+    const rows: AdMetricRow[] = [];
 
     for (const externalId of externalIds) {
       for (const day of eachDay(from, to)) {
@@ -154,6 +155,7 @@ class MockAdManager implements AdManager {
           Math.round((impressions * between(`ctr:${key}`, 6, 32)) / 1000),
         );
         rows.push({
+          externalId,
           day,
           impressions,
           clicks,
@@ -293,6 +295,8 @@ class MockCalendarClient implements CalendarClient {
 class MockPaymentClient implements PaymentClient {
   readonly provider = 'mock:payments';
   private readonly requests = new Map<string, PaymentRequest>();
+  /** How many times each request has been polled. */
+  private readonly polls = new Map<string, number>();
 
   async requestPayment(input: {
     gigId: string;
@@ -309,15 +313,34 @@ class MockPaymentClient implements PaymentClient {
       status: 'pending',
     };
     this.requests.set(externalId, request);
+    this.polls.set(externalId, 0);
     return request;
   }
 
   async getPayment(externalId: string): Promise<PaymentRequest> {
     await latency();
-    const existing = this.requests.get(externalId);
-    if (existing) return existing;
 
-    // Unknown id: derive a stable status so refreshing a saved link is sane.
+    const existing = this.requests.get(externalId);
+    if (existing) {
+      // Simulate the client actually paying. Without this a request created in
+      // this process would report `pending` forever and the deposit flow could
+      // never be completed or demoed.
+      //
+      // Poll count rather than elapsed time, so the transition is deterministic:
+      // the first check is pending, the second is paid.
+      const seen = (this.polls.get(externalId) ?? 0) + 1;
+      this.polls.set(externalId, seen);
+
+      if (existing.status === 'pending' && seen >= 2) {
+        const settled: PaymentRequest = { ...existing, status: 'paid' };
+        this.requests.set(externalId, settled);
+        return settled;
+      }
+      return existing;
+    }
+
+    // Unknown id — typically a link saved before a restart. Derive a stable
+    // status so re-checking it is at least self-consistent.
     const statuses: PaymentStatus[] = ['pending', 'paid', 'paid', 'failed'];
     return {
       externalId,

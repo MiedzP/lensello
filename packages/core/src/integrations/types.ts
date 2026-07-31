@@ -93,16 +93,30 @@ export interface CreateAdInput {
   endsOn: DateOnly | null;
 }
 
+/**
+ * One day of metrics for one ad.
+ *
+ * `externalId` is what makes a multi-ad fetch usable: without it the caller
+ * cannot tell which ad a row belongs to, and attributing spend by guesswork
+ * charges the wrong ad.
+ */
+export interface AdMetricRow extends Omit<AdMetric, 'id' | 'adId'> {
+  externalId: string;
+}
+
 export interface AdManager {
   readonly provider: string;
   createAd(input: CreateAdInput): Promise<PublishResult>;
   setAdStatus(externalId: string, active: boolean): Promise<void>;
-  /** Daily metrics for a window, inclusive of both endpoints. */
+  /**
+   * Daily metrics for a window, inclusive of both endpoints. Each row names the
+   * ad it belongs to, so one call can cover many ads.
+   */
   fetchMetrics(
     externalIds: readonly string[],
     from: DateOnly,
     to: DateOnly,
-  ): Promise<Omit<AdMetric, 'id' | 'adId'>[]>;
+  ): Promise<AdMetricRow[]>;
 }
 
 // --- inbound mail -------------------------------------------------------
