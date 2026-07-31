@@ -16,9 +16,14 @@ AGENTS.md             Conventions. Read this before writing code.
 
 ```bash
 npm install
-cp .env.example .env.local     # then fill in the Supabase + Anthropic values
-npm run dev                    # http://localhost:3000
+cp .env.example apps/web/.env.local   # then fill in the values
+npm run dev                           # http://localhost:3000
 ```
+
+**The env file must be at `apps/web/.env.local`, not the repo root.** Next.js
+loads environment files from the app directory it runs in, so a root-level
+`.env.local` is silently ignored — the app starts and then fails on the first
+Supabase call with no obvious cause.
 
 ### Database
 
@@ -142,10 +147,20 @@ with `externalId`, so one call can cover many ads, but the ads module still
 loops one ad at a time. Harmless against the mock; worth batching before a live
 adapter exists.
 
-**`db.types.ts` is hand-maintained** against the migrations. Replace it with
-`supabase gen types typescript` output once the CLI is available. Two modules
-carry local type declarations that exist only because it was frozen during
-parallel development and can then be deleted:
+**`db.types.ts` stays hand-maintained, deliberately.** The Supabase generator
+cannot infer union literals from CHECK constraints — it emits `status: string`
+where the hand-written file has the real six-value union, so adopting the
+generated output wholesale would lose type safety. It has been verified against
+the live schema (11 tables, 122 columns, nullability included, zero
+discrepancies). Re-verify after any schema change:
+
+```bash
+npm run db:types        # regenerate the snapshot from the live database
+npm run db:types:check  # diff it against db.types.ts; non-zero on drift
+```
+
+Two modules carry local type declarations that exist only because `db.types.ts`
+was frozen during parallel development, and can now be deleted:
 `apps/web/src/lib/library/db.ts`, and the cast helpers in
 `apps/web/src/lib/gigs/types.ts`.
 
