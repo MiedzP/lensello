@@ -1,0 +1,894 @@
+'use server';
+
+/**
+ * Every mutation for the campaigns module.
+ *
+ * Two rules hold everywhere in this file:
+ *
+ * 1. `requireUser()` first, always. These functions are reachable by direct
+ *    POST; a button that only renders for staff proves nothing about the caller.
+ * 2. Nothing from the client — or from the model — reaches the database without
+ *    passing a schema in `@/lib/campaigns/validation` first.
+ *
+ * Cache invalidation uses `revalidatePath`. `updateTag`/`cacheTag` would be the
+ * read-your-writes tool of choice, but tagging requires data cached under
+ * `'use cache'`, and every read here is a cookie-scoped Supabase query that is
+ * dynamic by construction and cannot be cached. `revalidatePath` from a Server
+ * Action updates the UI for the affected path immediately, which is the same
+ * outcome for this data.
+ */
+
+import type { Route } from 'next';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import {
+  CAMPAIGN_OBJECTIVE_LABELS,
+  type PostStatus,
+  type SocialPlatform,
+} from '@lensello/core';
+import { buildCampaignPlanPrompt, buildCaptionPrompt } from '@lensello/core/ai';
+import { getIntegrations } from '@lensello/core/integrations';
+import { requireUser } from '@/lib/auth';
+import { AiError, generateJson, isAiConfigured } from '@/lib/ai';
+import type { Tables, TablesInsert } from '@/lib/db.types';
+import { failed, ok, type ActionState } from '@/lib/campaigns/action-state';
+import {
+  PUBLISH_URL_TTL_SECONDS,
+  getAssetsByIds,
+  getCampaign,
+  getCampaignPost,
+  listAvailableShootTypes,
+  listLibraryPhotos,
+  shootTypeForAssets,
+  signPhotoUrls,
+  toDomainAsset,
+  type Db,
+  type LibraryShoot,
+} from '@/lib/campaigns/queries';
+import {
+  ALLOWED_POST_TRANSITIONS,
+  MAX_ASSETS_PER_POST,
+  PUBLISHABLE_STATUSES,
+  addPostSchema,
+  campaignPlanResponseSchema,
+  captionResponseSchema,
+  createCampaignSchema,
+  firstIssue,
+  normalizeHashtags,
+  parseHashtagInput,
+  postStatusChangeSchema,
+  reviewPlannedPosts,
+  sanitizeCaption,
+  updateCampaignSchema,
+  updatePostContentSchema,
+  uuidSchema,
+} from '@/lib/campaigns/validation';
+
+// --- small helpers ------------------------------------------------------
+
+function text(formData: FormData, name: string): string {
+  const value = formData.get(name);
+  return typeof value === 'string' ? value : '';
+}
+
+function textList(formData: FormData, name: string): string[] {
+  return formData
+    .getAll(name)
+    .filter((value): value is string => typeof value === 'string');
+}
+
+/**
+ * Turns a Postgres error into something a photographer can act on.
+ *
+ * The app validates before writing, so hitting one of these means a check we
+ * did not think of fired — the user still deserves a sentence rather than
+ * `new row for relation "campaign_posts" violates check constraint ...`.
+ */
+function friendlyDbError(message: string, fallback: string): string {
+  const constraints: Array<[string, string]> = [
+    [
+      'campaign_posts_scheduled_needs_time',
+      'A scheduled post needs a date and time.',
+    ],
+    [
+      'campaign_posts_published_needs_time',
+      'A published post needs a publish time, which only the publish action can set.',
+    ],
+    [
+      'campaign_posts_failed_needs_reason',
+      'A failed post needs a failure reason.',
+    ],
+    [
+      'campaign_posts_caption_length',
+      'That caption is too long for the platform.',
+    ],
+    [
+      'campaign_posts_asset_limit',
+      `A post can carry at most ${MAX_ASSETS_PER_POST} photos.`,
+    ],
+    ['campaign_posts_platform_check', 'That is not a platform we can publish to.'],
+    ['campaigns_platforms_valid', 'One of those platforms is not supported.'],
+    [
+      'campaigns_ends_after_starts',
+      'The end date cannot be before the start date.',
+    ],
+    ['campaigns_name_check', 'Give the campaign a name.'],
+  ];
+
+  for (const [needle, friendly] of constraints) {
+    if (message.includes(needle)) return friendly;
+  }
+  return fallback;
+}
+
+function refreshCampaign(campaignId: string): void {
+  revalidatePath('/campaigns');
+  revalidatePath(`/campaigns/${campaignId}`);
+}
+
+/** Loads a post and its campaign together, or explains which one is missing. */
+async function loadPost(
+  db: Db,
+  postId: string,
+): Promise<
+  | { post: Tables<'campaign_posts'>; campaign: Tables<'campaigns'>; error: null }
+  | { post: null; campaign: null; error: string }
+> {
+  const post = await getCampaignPost(db, postId);
+  if (!post) {
+    return { post: null, campaign: null, error: 'That post no longer exists.' };
+  }
+  const campaign = await getCampaign(db, post.campaign_id);
+  if (!campaign) {
+    return {
+      post: null,
+      campaign: null,
+      error: 'That post’s campaign no longer exists.',
+    };
+  }
+  return { post, campaign, error: null };
+}
+
+// --- campaign creation --------------------------------------------------
+
+export async function createCampaign(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = createCampaignSchema.safeParse({
+    name: text(formData, 'name'),
+    objective: text(formData, 'objective'),
+    platforms: textList(formData, 'platforms'),
+    audience: text(formData, 'audience'),
+    brief: text(formData, 'brief'),
+    postCount: text(formData, 'postCount') || '4',
+    startsOn: text(formData, 'startsOn'),
+    endsOn: text(formData, 'endsOn'),
+    mode: text(formData, 'mode'),
+  });
+
+  if (!parsed.success) return failed(firstIssue(parsed.error));
+  const input = parsed.data;
+
+  // The client may ask to generate; only the server decides whether it can.
+  const generating = input.mode === 'generate' && isAiConfigured();
+
+  let plannedName: string | null = null;
+  let posts: Array<{ platform: SocialPlatform; caption: string; hashtags: string[] }> =
+    [];
+  let dropped = 0;
+
+  if (generating) {
+    const prompt = buildCampaignPlanPrompt({
+      objective: input.objective,
+      platforms: input.platforms,
+      audience: input.audience,
+      brief: input.brief,
+      postCount: input.postCount,
+      availableShootTypes: await listAvailableShootTypes(supabase),
+    });
+
+    let raw: unknown;
+    try {
+      // A plan of up to 8 captions does not fit the 2048-token default.
+      raw = await generateJson<unknown>(prompt, { maxTokens: 4096 });
+    } catch (cause) {
+      // AiError messages are written for users; anything else is not.
+      return failed(
+        cause instanceof AiError
+          ? cause.message
+          : 'The AI request failed. Please try again.',
+      );
+    }
+
+    const plan = campaignPlanResponseSchema.safeParse(raw);
+    if (!plan.success) {
+      return failed(
+        'The AI returned a plan in an unexpected shape. Try again, or create the campaign and add posts yourself.',
+      );
+    }
+
+    const review = reviewPlannedPosts(
+      plan.data.posts,
+      input.platforms,
+      input.postCount,
+    );
+
+    if (review.posts.length === 0) {
+      return failed(
+        `The AI did not return any usable posts. ${review.rejections.join(' ')}`.trim(),
+      );
+    }
+
+    posts = review.posts;
+    dropped = Math.max(0, input.postCount - review.posts.length);
+    plannedName = plan.data.name ? plan.data.name.trim().slice(0, 120) : null;
+  }
+
+  const name =
+    input.name ??
+    (plannedName && plannedName.length > 0 ? plannedName : null) ??
+    `${CAMPAIGN_OBJECTIVE_LABELS[input.objective]} campaign`;
+
+  const insert: TablesInsert<'campaigns'> = {
+    name,
+    objective: input.objective,
+    status: 'draft',
+    brief: input.brief,
+    audience: input.audience,
+    platforms: input.platforms,
+    starts_on: input.startsOn,
+    ends_on: input.endsOn,
+  };
+
+  const { data: campaign, error } = await supabase
+    .from('campaigns')
+    .insert(insert)
+    .select('id')
+    .single();
+
+  if (error || !campaign) {
+    return failed(
+      friendlyDbError(
+        error?.message ?? '',
+        'Could not create the campaign. Please try again.',
+      ),
+    );
+  }
+
+  if (posts.length > 0) {
+    const rows: TablesInsert<'campaign_posts'>[] = posts.map((post) => ({
+      campaign_id: campaign.id,
+      platform: post.platform,
+      caption: post.caption,
+      hashtags: post.hashtags,
+      status: 'draft',
+    }));
+
+    const { error: postsError } = await supabase.from('campaign_posts').insert(rows);
+
+    if (postsError) {
+      // The campaign is seconds old and nothing references it, so rolling it
+      // back is safer than leaving an empty shell the user did not ask for.
+      await supabase.from('campaigns').delete().eq('id', campaign.id);
+      return failed(
+        friendlyDbError(
+          postsError.message,
+          'The plan was generated but could not be saved. Please try again.',
+        ),
+      );
+    }
+  }
+
+  revalidatePath('/campaigns');
+  redirect(
+    (dropped > 0
+      ? `/campaigns/${campaign.id}?dropped=${dropped}`
+      : `/campaigns/${campaign.id}`) as Route,
+  );
+}
+
+// --- campaign metadata --------------------------------------------------
+
+export async function updateCampaign(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = updateCampaignSchema.safeParse({
+    campaignId: text(formData, 'campaignId'),
+    name: text(formData, 'name'),
+    objective: text(formData, 'objective'),
+    status: text(formData, 'status'),
+    platforms: textList(formData, 'platforms'),
+    audience: text(formData, 'audience'),
+    brief: text(formData, 'brief'),
+    startsOn: text(formData, 'startsOn'),
+    endsOn: text(formData, 'endsOn'),
+  });
+
+  if (!parsed.success) return failed(firstIssue(parsed.error));
+  const input = parsed.data;
+
+  const { error } = await supabase
+    .from('campaigns')
+    .update({
+      name: input.name,
+      objective: input.objective,
+      status: input.status,
+      platforms: input.platforms,
+      audience: input.audience,
+      brief: input.brief,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn,
+    })
+    .eq('id', input.campaignId);
+
+  if (error) {
+    return failed(friendlyDbError(error.message, 'Could not save the campaign.'));
+  }
+
+  refreshCampaign(input.campaignId);
+  return ok('Campaign saved.');
+}
+
+// --- post content -------------------------------------------------------
+
+export async function updatePostContent(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = updatePostContentSchema.safeParse({
+    postId: text(formData, 'postId'),
+    caption: text(formData, 'caption'),
+    hashtags: text(formData, 'hashtags'),
+  });
+
+  if (!parsed.success) return failed(firstIssue(parsed.error));
+
+  const { post, error: loadError } = await loadPost(supabase, parsed.data.postId);
+  if (!post) return failed(loadError);
+
+  if (post.status === 'published') {
+    return failed(
+      'This post is already published — editing the copy here would not change what is live on the platform.',
+    );
+  }
+
+  const { error } = await supabase
+    .from('campaign_posts')
+    .update({
+      caption: sanitizeCaption(parsed.data.caption),
+      hashtags: parseHashtagInput(parsed.data.hashtags),
+    })
+    .eq('id', post.id);
+
+  if (error) {
+    return failed(friendlyDbError(error.message, 'Could not save the post.'));
+  }
+
+  refreshCampaign(post.campaign_id);
+  return ok('Post saved.');
+}
+
+export async function addPost(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = addPostSchema.safeParse({
+    campaignId: text(formData, 'campaignId'),
+    platform: text(formData, 'platform'),
+    caption: text(formData, 'caption'),
+  });
+
+  if (!parsed.success) return failed(firstIssue(parsed.error));
+
+  const campaign = await getCampaign(supabase, parsed.data.campaignId);
+  if (!campaign) return failed('That campaign no longer exists.');
+
+  const insert: TablesInsert<'campaign_posts'> = {
+    campaign_id: campaign.id,
+    platform: parsed.data.platform,
+    caption: sanitizeCaption(parsed.data.caption),
+    status: 'draft',
+  };
+
+  const { error } = await supabase.from('campaign_posts').insert(insert);
+  if (error) {
+    return failed(friendlyDbError(error.message, 'Could not add the post.'));
+  }
+
+  refreshCampaign(campaign.id);
+  return ok('Post added.');
+}
+
+export async function deletePost(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = uuidSchema.safeParse(text(formData, 'postId'));
+  if (!parsed.success) return failed('That post could not be identified.');
+
+  const { post, error: loadError } = await loadPost(supabase, parsed.data);
+  if (!post) return failed(loadError);
+
+  const { error } = await supabase
+    .from('campaign_posts')
+    .delete()
+    .eq('id', post.id);
+
+  if (error) return failed('Could not delete the post.');
+
+  refreshCampaign(post.campaign_id);
+  return ok('Post deleted.');
+}
+
+// --- status transitions -------------------------------------------------
+
+export async function changePostStatus(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = postStatusChangeSchema.safeParse({
+    postId: text(formData, 'postId'),
+    status: text(formData, 'status'),
+    scheduledFor: text(formData, 'scheduledFor'),
+  });
+
+  if (!parsed.success) return failed(firstIssue(parsed.error));
+  const { postId, status: next, scheduledFor } = parsed.data;
+
+  const { post, error: loadError } = await loadPost(supabase, postId);
+  if (!post) return failed(loadError);
+
+  const current = post.status as PostStatus;
+
+  if (next === 'published') {
+    return failed(
+      'A post becomes published by publishing it, so the platform post id is real. Use Publish.',
+    );
+  }
+  if (next === 'failed') {
+    return failed('“Failed” is set by a failed publish attempt, not by hand.');
+  }
+  if (current === next) {
+    return ok(`Already ${next}.`);
+  }
+  if (!ALLOWED_POST_TRANSITIONS[current].includes(next)) {
+    return failed(
+      current === 'published'
+        ? 'A published post cannot change status. Delete it here if you have removed it from the platform.'
+        : `A ${current} post cannot move straight to ${next}.`,
+    );
+  }
+
+  const update: {
+    status: PostStatus;
+    scheduled_for?: string;
+    failure_reason?: null;
+  } = { status: next };
+
+  // Retrying clears the old reason; leaving it would keep a stale explanation
+  // attached to a post that is no longer failed.
+  if (current === 'failed') update.failure_reason = null;
+
+  if (next === 'scheduled') {
+    // The schema requires a time for a scheduled post; catch it here so the
+    // user gets a sentence instead of a constraint violation.
+    if (scheduledFor.trim().length === 0) {
+      return failed('Pick the date and time this post should go out.');
+    }
+    const when = new Date(scheduledFor);
+    if (Number.isNaN(when.getTime())) {
+      return failed('That date and time could not be read.');
+    }
+    if (when.getTime() < Date.now() - 60_000) {
+      return failed('Pick a time in the future.');
+    }
+    update.scheduled_for = when.toISOString();
+  }
+
+  const { error } = await supabase
+    .from('campaign_posts')
+    .update(update)
+    .eq('id', post.id);
+
+  if (error) {
+    return failed(
+      friendlyDbError(error.message, 'Could not update the post’s status.'),
+    );
+  }
+
+  refreshCampaign(post.campaign_id);
+  return ok(next === 'scheduled' ? 'Post scheduled.' : `Post moved to ${next}.`);
+}
+
+// --- photos -------------------------------------------------------------
+
+/**
+ * Replaces a post's attached photos with `assetIds`, in the given order.
+ *
+ * Called directly from the client rather than through a form: attach, remove,
+ * reorder, and "make cover" are all the same write, and expressing them as one
+ * ordered list keeps index 0 — the carousel cover — unambiguous.
+ */
+export async function setPostAssets(
+  postId: string,
+  assetIds: string[],
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const id = uuidSchema.safeParse(postId);
+  if (!id.success) return failed('That post could not be identified.');
+
+  if (!Array.isArray(assetIds)) return failed('Those photos could not be read.');
+
+  const ordered: string[] = [];
+  for (const assetId of assetIds) {
+    if (typeof assetId !== 'string') continue;
+    if (!uuidSchema.safeParse(assetId).success) {
+      return failed('One of those photos could not be identified.');
+    }
+    if (!ordered.includes(assetId)) ordered.push(assetId);
+  }
+
+  if (ordered.length > MAX_ASSETS_PER_POST) {
+    return failed(
+      `A post can carry at most ${MAX_ASSETS_PER_POST} photos — that is the carousel limit.`,
+    );
+  }
+
+  const { post, error: loadError } = await loadPost(supabase, id.data);
+  if (!post) return failed(loadError);
+
+  if (post.status === 'published') {
+    return failed(
+      'This post is already published — changing its photos here would not change what is live.',
+    );
+  }
+
+  // Every id must be a real asset. An unknown one would otherwise sit in the
+  // array forever, rendering as a hole in the carousel.
+  const assets = await getAssetsByIds(supabase, ordered);
+  if (assets.length !== ordered.length) {
+    return failed('One of those photos is no longer in the library.');
+  }
+
+  const { error } = await supabase
+    .from('campaign_posts')
+    .update({ asset_ids: ordered })
+    .eq('id', post.id);
+
+  if (error) {
+    return failed(friendlyDbError(error.message, 'Could not save the photos.'));
+  }
+
+  refreshCampaign(post.campaign_id);
+  return ok(
+    ordered.length === 0
+      ? 'Photos removed.'
+      : `${ordered.length} photo${ordered.length === 1 ? '' : 's'} attached.`,
+  );
+}
+
+/**
+ * Photo-picker source, loaded on demand.
+ *
+ * A read behind `'use server'` so the campaign detail page does not have to
+ * embed (and sign) the whole library on every render just in case someone
+ * opens a picker. It authenticates exactly like a mutation does.
+ */
+export async function fetchLibraryPhotos(): Promise<{
+  shoots: LibraryShoot[];
+  error: string | null;
+}> {
+  const { supabase } = await requireUser();
+  try {
+    return { shoots: await listLibraryPhotos(supabase), error: null };
+  } catch {
+    return { shoots: [], error: 'Could not load the photo library.' };
+  }
+}
+
+// --- caption regeneration -----------------------------------------------
+
+export async function regenerateCaption(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = uuidSchema.safeParse(text(formData, 'postId'));
+  if (!parsed.success) return failed('That post could not be identified.');
+
+  if (!isAiConfigured()) {
+    return failed(
+      'AI generation is unavailable: ANTHROPIC_API_KEY is not set on the server.',
+    );
+  }
+
+  const { post, campaign, error: loadError } = await loadPost(
+    supabase,
+    parsed.data,
+  );
+  if (!post || !campaign) return failed(loadError);
+
+  if (post.status === 'published') {
+    return failed(
+      'This post is already published — rewriting the caption here would not change what is live.',
+    );
+  }
+
+  const assets = await getAssetsByIds(supabase, post.asset_ids);
+  // Preserve the post's own order: the prompt describes the photos "in order".
+  const byId = new Map(assets.map((asset) => [asset.id, asset]));
+  const ordered = post.asset_ids.flatMap((assetId) => {
+    const asset = byId.get(assetId);
+    return asset ? [toDomainAsset(asset)] : [];
+  });
+
+  const prompt = buildCaptionPrompt({
+    platform: post.platform,
+    campaign: {
+      name: campaign.name,
+      objective: campaign.objective,
+      brief: campaign.brief,
+      audience: campaign.audience,
+    },
+    assets: ordered,
+    shootType: await shootTypeForAssets(supabase, assets),
+  });
+
+  let raw: unknown;
+  try {
+    raw = await generateJson<unknown>(prompt, { maxTokens: 1024 });
+  } catch (cause) {
+    return failed(
+      cause instanceof AiError
+        ? cause.message
+        : 'The AI request failed. Please try again.',
+    );
+  }
+
+  const result = captionResponseSchema.safeParse(raw);
+  if (!result.success) {
+    return failed('The AI returned a caption in an unexpected shape. Try again.');
+  }
+
+  const caption = sanitizeCaption(result.data.caption);
+  if (caption.length === 0) {
+    return failed('The AI returned an empty caption. Try again.');
+  }
+
+  const { error } = await supabase
+    .from('campaign_posts')
+    .update({
+      caption,
+      hashtags: normalizeHashtags(
+        (result.data.hashtags ?? []).filter(
+          (tag): tag is string => typeof tag === 'string',
+        ),
+      ),
+    })
+    .eq('id', post.id);
+
+  if (error) {
+    return failed(friendlyDbError(error.message, 'Could not save the new caption.'));
+  }
+
+  refreshCampaign(post.campaign_id);
+  return ok(
+    ordered.length > 0
+      ? 'Caption rewritten from the attached photos.'
+      : 'Caption rewritten. Attach photos for copy that describes the images.',
+  );
+}
+
+// --- publishing ---------------------------------------------------------
+
+interface PublishOutcome {
+  ok: boolean;
+  /** One line, safe to show the user. */
+  detail: string;
+}
+
+/**
+ * Publishes one post through the social adapter.
+ *
+ * All outbound traffic goes through `getIntegrations().social`; this module
+ * never calls a platform API itself. On failure the row is parked in `failed`
+ * with the reason, which is what the detail page surfaces.
+ */
+async function publishOnePost(
+  db: Db,
+  post: Tables<'campaign_posts'>,
+): Promise<PublishOutcome> {
+  const label = `${post.platform} post`;
+
+  if (!PUBLISHABLE_STATUSES.includes(post.status as PostStatus)) {
+    return {
+      ok: false,
+      detail:
+        post.status === 'published'
+          ? `${label}: already published.`
+          : `${label}: approve it before publishing.`,
+    };
+  }
+
+  if (post.caption.trim().length === 0) {
+    return { ok: false, detail: `${label}: write a caption first.` };
+  }
+
+  if (post.asset_ids.length === 0) {
+    return {
+      ok: false,
+      detail: `${label}: attach at least one photo — every platform we publish to needs an image.`,
+    };
+  }
+
+  // Photos live in a private bucket, so the platform gets long-lived signed
+  // URLs: it fetches the image itself, sometimes well after the API call.
+  const assets = await getAssetsByIds(db, post.asset_ids);
+  const byId = new Map(assets.map((asset) => [asset.id, asset]));
+  const paths = post.asset_ids.flatMap((assetId) => {
+    const asset = byId.get(assetId);
+    return asset ? [asset.storage_path] : [];
+  });
+
+  const signed = await signPhotoUrls(db, paths, PUBLISH_URL_TTL_SECONDS);
+  const imageUrls = paths.flatMap((path) => {
+    const url = signed.get(path);
+    return url ? [url] : [];
+  });
+
+  if (imageUrls.length !== post.asset_ids.length) {
+    // Nothing was sent anywhere, so the post keeps its current status.
+    return {
+      ok: false,
+      detail: `${label}: could not create signed URLs for every attached photo. Nothing was published.`,
+    };
+  }
+
+  // Resolved outside the try: a misconfigured integration registry is an
+  // environment problem, and parking the post in `failed` over it would blame
+  // the content for something the content cannot fix.
+  let social;
+  try {
+    social = getIntegrations().social;
+  } catch (cause) {
+    return {
+      ok: false,
+      detail: `${label}: publishing is not configured — ${
+        cause instanceof Error ? cause.message : 'no social adapter is available.'
+      }`,
+    };
+  }
+
+  try {
+    const result = await social.publish({
+      platform: post.platform,
+      caption: post.caption,
+      hashtags: post.hashtags,
+      imageUrls,
+    });
+
+    const { error } = await db
+      .from('campaign_posts')
+      .update({
+        status: 'published',
+        published_at: result.publishedAt,
+        external_id: result.externalId,
+        failure_reason: null,
+      })
+      .eq('id', post.id);
+
+    if (error) {
+      // Worth being loud about: it is live on the platform but our row says
+      // otherwise, and only the id in this message can reconcile it.
+      return {
+        ok: false,
+        detail: `${label}: published as ${result.externalId} but the record could not be updated. ${friendlyDbError(error.message, 'Please retry.')}`,
+      };
+    }
+
+    return { ok: true, detail: `${label}: published.` };
+  } catch (cause) {
+    // The schema requires a non-null reason on a failed post, and a blank one
+    // would render as "Publishing failed." with nothing to act on.
+    const raw = cause instanceof Error ? cause.message.trim() : '';
+    const reason = raw.length > 0 ? raw : 'The platform rejected the post.';
+
+    const { error } = await db
+      .from('campaign_posts')
+      .update({
+        status: 'failed',
+        failure_reason: reason.slice(0, 500),
+      })
+      .eq('id', post.id);
+
+    return {
+      ok: false,
+      detail: error
+        ? `${label}: failed (${reason}). The failure could not be recorded.`
+        : `${label}: failed — ${reason}`,
+    };
+  }
+}
+
+export async function publishPost(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = uuidSchema.safeParse(text(formData, 'postId'));
+  if (!parsed.success) return failed('That post could not be identified.');
+
+  const { post, error: loadError } = await loadPost(supabase, parsed.data);
+  if (!post) return failed(loadError);
+
+  const outcome = await publishOnePost(supabase, post);
+  refreshCampaign(post.campaign_id);
+
+  return outcome.ok ? ok(outcome.detail) : failed(outcome.detail);
+}
+
+/**
+ * Publishes every approved post in a campaign, reporting each outcome.
+ *
+ * Sequential and failure-tolerant on purpose: one platform rejecting a post
+ * must not stop the rest of the set from going out.
+ */
+export async function publishApprovedPosts(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = uuidSchema.safeParse(text(formData, 'campaignId'));
+  if (!parsed.success) return failed('That campaign could not be identified.');
+
+  const campaign = await getCampaign(supabase, parsed.data);
+  if (!campaign) return failed('That campaign no longer exists.');
+
+  const { data: posts, error } = await supabase
+    .from('campaign_posts')
+    .select('*')
+    .eq('campaign_id', campaign.id)
+    .eq('status', 'approved')
+    .order('created_at', { ascending: true });
+
+  if (error) return failed('Could not load the approved posts.');
+  if (!posts || posts.length === 0) {
+    return failed('No posts are approved yet. Approve a post to publish it.');
+  }
+
+  const failures: string[] = [];
+  let published = 0;
+
+  for (const post of posts) {
+    const outcome = await publishOnePost(supabase, post);
+    if (outcome.ok) published += 1;
+    else failures.push(outcome.detail);
+  }
+
+  refreshCampaign(campaign.id);
+
+  const summary = `Published ${published} of ${posts.length}.`;
+  if (failures.length === 0) return ok(summary);
+  return {
+    error: `${summary} ${failures.join(' ')}`,
+    message: published > 0 ? summary : null,
+  };
+}
