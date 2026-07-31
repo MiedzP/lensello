@@ -22,10 +22,24 @@ npm run dev                    # http://localhost:3000
 
 ### Database
 
-There is no Supabase CLI in this environment, so apply the schema by pasting
-`supabase/migrations/0001_init.sql` into the Supabase dashboard SQL editor
-(Database → SQL Editor). It is idempotent-safe on a fresh project only — it
-creates tables, so do not re-run it against a populated database.
+There is no Supabase CLI in this environment, so apply the migrations by hand in
+the Supabase dashboard SQL editor (Database → SQL Editor), **in numeric order**:
+
+```
+0001_init.sql        all tables, RLS, storage bucket   <- must be first
+0002_library.sql     asset indexes + tag functions
+0003_campaigns.sql   post constraints + indexes
+0004_clients.sql     email normalisation + upsert index
+0005_gigs.sql        calendar/payment columns
+0006_ads.sql         ad indexes
+```
+
+`0002`–`0006` are additive and order-independent among themselves, but all
+depend on `0001`. None is safe to re-run against a populated database.
+
+`0004` normalises existing `clients.email` values to trimmed-lowercase before
+adding a unique index. If two rows differ only by surrounding whitespace it will
+fail — that is the correct outcome, and those rows need merging by hand first.
 
 Once applied, provision yourself as staff. Sign up through the app, then run
 this in the SQL editor:
@@ -81,9 +95,57 @@ posting to Instagram when it isn't.
 
 ## Known gaps
 
-- `apps/web/src/lib/db.types.ts` is hand-maintained against the migration.
-  Once the Supabase CLI is available, replace it with
-  `supabase gen types typescript` output.
-- `npm audit` reports high-severity advisories in the ESLint toolchain
-  (`minimatch`/`brace-expansion`) and `postcss`/`sharp` under Next. All are
-  build-time dev dependencies, not runtime-reachable.
+Things that are genuinely absent, so nobody discovers them by surprise in front
+of a client.
+
+**Nothing publishes itself.** `scheduled` campaign posts store a
+`scheduled_for` time, but no cron worker exists. Publishing is a manual action.
+A scheduled post will sit there until someone presses publish.
+
+**No AI alt text for photos.** Describing an image needs vision input, which
+the shared `generateJson` helper does not accept. Alt text is manual-only.
+Extending `apps/web/src/lib/ai.ts` with an image-accepting variant is the fix.
+
+**`assets.captured_at` is never populated.** Reading EXIF needs a dependency
+that wasn't added. The UI shows "Unknown" rather than inventing a date.
+
+**Deposit settlement is simulated.** The mock payment adapter marks a request
+`paid` on the second status check. That makes the flow demoable; it is not a
+real payment.
+
+**No pagination UI.** List reads are capped (60 shoots, 200 assets per shoot,
+100 clients) which is fine at one studio's scale and will need revisiting if
+the library grows past a few thousand photos.
+
+**No test framework.** Several modules were verified with throwaway assertion
+scripts during development, but nothing is committed as a test. Adding Vitest
+is the first thing to do before this changes much.
+
+**Signed URLs bypass the image cache.** Storage tokens change per render, so
+`next/image` re-optimises each load. Fine at current scale; stable thumbnail
+URLs are the fix if grids get slow.
+
+**Per-ad metric fetching.** `AdManager.fetchMetrics` now returns rows tagged
+with `externalId`, so one call can cover many ads, but the ads module still
+loops one ad at a time. Harmless against the mock; worth batching before a live
+adapter exists.
+
+**`db.types.ts` is hand-maintained** against the migrations. Replace it with
+`supabase gen types typescript` output once the CLI is available. Two modules
+carry local type declarations that exist only because it was frozen during
+parallel development and can then be deleted:
+`apps/web/src/lib/library/db.ts`, and the cast helpers in
+`apps/web/src/lib/gigs/types.ts`.
+
+**`npm audit`** reports high-severity advisories in the ESLint toolchain
+(`minimatch`/`brace-expansion`) and `postcss`/`sharp` under Next. All are
+build-time dev dependencies, not runtime-reachable.
+
+## Cache invalidation
+
+Four of the five modules use `revalidatePath` rather than `updateTag`, and
+independently arrived at the same reasoning: `updateTag` needs data cached under
+`'use cache'`/`cacheTag`, which needs `cacheComponents: true`, and every read
+here goes through a cookie-bound Supabase client that cannot sit in a cached
+scope anyway. The ads module uses `updateTag`, which is harmless but currently
+inert. If cached reads are ever introduced, revisit all five together.
