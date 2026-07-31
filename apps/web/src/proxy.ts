@@ -1,0 +1,70 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+
+/**
+ * Renamed from `middleware` in Next.js 16 — the file must be `proxy.ts` and the
+ * export must be named `proxy`. Node.js runtime only; `edge` is unsupported here.
+ *
+ * Two jobs: refresh the Supabase session cookie (Server Components can't set
+ * cookies, so it has to happen here), and bounce unauthenticated visitors to
+ * the login page.
+ *
+ * This is a convenience gate, not a security boundary. RLS is what actually
+ * protects data.
+ */
+
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/error'];
+
+export async function proxy(request: NextRequest) {
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          for (const { name, value } of cookiesToSet) {
+            request.cookies.set(name, value);
+          }
+          response = NextResponse.next({ request });
+          for (const { name, value, options } of cookiesToSet) {
+            response.cookies.set(name, value, options);
+          }
+        },
+      },
+    },
+  );
+
+  // Refreshes the auth token as a side effect. Must run before any redirect
+  // decision so an expiring session is renewed rather than bounced.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+  const isPublic = PUBLIC_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+
+  if (!user && !isPublic) {
+    const loginUrl = new URL('/login', request.url);
+    // Preserve intent so login can return the user where they were headed.
+    loginUrl.searchParams.set('next', pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (user && pathname === '/login') {
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  return response;
+}
+
+export const config = {
+  // Skip static assets and image optimization; they don't need a session.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif)$).*)'],
+};
