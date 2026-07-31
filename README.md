@@ -22,24 +22,36 @@ npm run dev                    # http://localhost:3000
 
 ### Database
 
-There is no Supabase CLI in this environment, so apply the migrations by hand in
-the Supabase dashboard SQL editor (Database → SQL Editor), **in numeric order**:
+Migrations follow the Supabase CLI's timestamp convention and apply in
+filename order:
 
 ```
-0001_init.sql        all tables, RLS, storage bucket   <- must be first
-0002_library.sql     asset indexes + tag functions
-0003_campaigns.sql   post constraints + indexes
-0004_clients.sql     email normalisation + upsert index
-0005_gigs.sql        calendar/payment columns
-0006_ads.sql         ad indexes
+20260731150000_init.sql        all tables, RLS, storage bucket   <- must be first
+20260731150100_library.sql     asset indexes + tag functions
+20260731150200_campaigns.sql   post constraints + indexes
+20260731150300_clients.sql     email normalisation + upsert index
+20260731150400_gigs.sql        calendar/payment columns
+20260731150500_ads.sql         ad indexes
 ```
 
-`0002`–`0006` are additive and order-independent among themselves, but all
-depend on `0001`. None is safe to re-run against a populated database.
+Everything after `init` is additive and order-independent among themselves, but
+all depend on `init`. None is safe to re-run against a populated database.
 
-`0004` normalises existing `clients.email` values to trimmed-lowercase before
-adding a unique index. If two rows differ only by surrounding whitespace it will
-fail — that is the correct outcome, and those rows need merging by hand first.
+With the CLI:
+
+```bash
+supabase login
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
+
+Otherwise paste each file into the dashboard SQL editor (Database → SQL Editor)
+in the order listed above.
+
+The `clients` migration normalises existing `clients.email` values to
+trimmed-lowercase before adding a unique index. If two rows differ only by
+surrounding whitespace it will fail — that is the correct outcome, and those rows
+need merging by hand first.
 
 Once applied, provision yourself as staff. Sign up through the app, then run
 this in the SQL editor:

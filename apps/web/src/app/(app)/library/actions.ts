@@ -389,7 +389,7 @@ export async function addAssetsTag(
   if (!isUuid(shootId) || !ids) return fail('Nothing to tag.');
   if (!tag) return fail('A tag is 1 to 32 characters.');
 
-  // One statement instead of a read-modify-write per row; see 0002_library.sql.
+  // One statement instead of a read-modify-write per row; see 20260731150100_library.sql.
   const { error } = await libraryDb(supabase).rpc('library_add_asset_tag', {
     p_shoot_id: shootId,
     p_asset_ids: ids,

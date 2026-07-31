@@ -4,7 +4,7 @@
  * Pure functions — no Supabase, no request context — so the rules are readable
  * in one place and the action stays about orchestration.
  *
- * Two of these checks mirror CHECK constraints in 0001_init.sql
+ * Two of these checks mirror CHECK constraints in 20260731150000_init.sql
  * (`gigs_ends_after_starts`, `gigs_deposit_within_price`). They are duplicated
  * deliberately: Postgres rejecting a row produces "violates check constraint
  * gigs_deposit_within_price", which is not a sentence you show a photographer.

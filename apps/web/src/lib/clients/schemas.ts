@@ -34,7 +34,7 @@ export const clientRecordSchema = z.object({
     .refine((value) => value.length > 0, 'A name is required.')
     .refine((value) => value.length <= 200, 'Keep the name under 200 characters.'),
   // Lower-cased, not merely trimmed. `clients_email_normalised` in
-  // 0004_clients.sql rejects anything else, and matching an inbound sender to
+  // 20260731150300_clients.sql rejects anything else, and matching an inbound sender to
   // this client depends on the stored value already being normalised.
   email: z
     .string()

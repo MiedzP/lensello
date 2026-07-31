@@ -2,7 +2,7 @@
 --
 -- Deliberately additive and table-free: no new tables, columns, or constraints,
 -- so this migration introduces no new RLS surface. `public.shoots` and
--- `public.assets` keep the `*_staff_all` policies from 0001_init.sql, and every
+-- `public.assets` keep the `*_staff_all` policies from 20260731150000_init.sql, and every
 -- function below is SECURITY INVOKER, so each statement inside it is still
 -- evaluated against the caller's RLS context. Nothing here can be used to read
 -- or write a row the caller could not already reach directly.

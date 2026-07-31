@@ -1,7 +1,7 @@
 -- Campaigns module: schema hardening.
 --
 -- The `campaigns` and `campaign_posts` tables themselves are created in
--- 0001_init.sql, together with RLS and the staff policies. This migration adds
+-- 20260731150000_init.sql, together with RLS and the staff policies. This migration adds
 -- no new tables (so no new policies are needed) — it adds the invariants and
 -- indexes the campaigns module depends on, so a bug in the app layer cannot
 -- leave the data in a state the UI cannot explain.

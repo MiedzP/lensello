@@ -1,7 +1,7 @@
 /**
  * Database types for the Lensello schema.
  *
- * Hand-written to mirror supabase/migrations/0001_init.sql in the shape the
+ * Hand-written to mirror supabase/migrations/20260731150000_init.sql in the shape the
  * Supabase type generator emits, so it can be replaced wholesale once the CLI
  * is available:
  *
@@ -97,7 +97,7 @@ export interface Database {
           deposit_paid_at: string | null;
           balance_paid_at: string | null;
           notes: string | null;
-          // Added by 0005_gigs.sql — external ids and hosted checkout links
+          // Added by 20260731150400_gigs.sql — external ids and hosted checkout links
           // for the calendar and payment adapters.
           calendar_event_id: string | null;
           deposit_payment_id: string | null;

@@ -3,9 +3,9 @@ import type { Session } from '@/lib/auth';
 import type { Database } from '@/lib/db.types';
 
 /**
- * Schema typing for the functions added by `supabase/migrations/0002_library.sql`.
+ * Schema typing for the functions added by `supabase/migrations/20260731150100_library.sql`.
  *
- * `@/lib/db.types` is a shared file that mirrors `0001_init.sql`, and this
+ * `@/lib/db.types` is a shared file that mirrors `20260731150000_init.sql`, and this
  * module does not own it, so the three `library_*` functions are declared here
  * instead. Everything downstream of `libraryDb()` stays fully typed — the one
  * cast is confined to this file.

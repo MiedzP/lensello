@@ -1,6 +1,6 @@
 -- Ads module.
 --
--- 0001_init.sql already models `ads` and `ad_metrics`, including the three
+-- 20260731150000_init.sql already models `ads` and `ad_metrics`, including the three
 -- constraints this module leans on and must not duplicate:
 --
 --   * ad_metrics_unique_day (ad_id, day)  — the ON CONFLICT target that makes

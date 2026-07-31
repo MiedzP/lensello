@@ -17,7 +17,7 @@ import type { Tone } from '@/components/ui';
 
 export const PHOTOS_BUCKET = 'photos';
 
-/** Mirrors `allowed_mime_types` on the `photos` bucket in 0001_init.sql. */
+/** Mirrors `allowed_mime_types` on the `photos` bucket in 20260731150000_init.sql. */
 export const ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',

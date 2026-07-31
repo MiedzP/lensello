@@ -29,7 +29,7 @@ const ALL = '*';
 
 function asGigs(rows: unknown): GigRow[] {
   // Cast at the query boundary: the shared generated types do not yet know
-  // about the columns added in 0005_gigs.sql.
+  // about the columns added in 20260731150400_gigs.sql.
   return (rows ?? []) as GigRow[];
 }
 

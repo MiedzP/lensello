@@ -1,7 +1,7 @@
 -- Clients module: make "match an inbound sender to a client" a single atomic
 -- upsert instead of a read-then-write race.
 --
--- 0001_init.sql already guarantees one client per email, but it does so with an
+-- 20260731150000_init.sql already guarantees one client per email, but it does so with an
 -- *expression* index:
 --
 --   create unique index clients_email_key on public.clients (lower(email)) where email is not null;
@@ -63,5 +63,5 @@ comment on index public.clients_email_unique is
 -- --------------------------------------------------------------------------
 
 -- No new tables, so no new policies. `clients` and `messages` keep the
--- `*_staff_all` policies created in 0001_init.sql, and RLS stays enabled on
+-- `*_staff_all` policies created in 20260731150000_init.sql, and RLS stays enabled on
 -- both. Adding an index or a constraint does not affect policy evaluation.

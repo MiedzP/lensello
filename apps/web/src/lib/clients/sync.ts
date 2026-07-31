@@ -8,8 +8,8 @@
  *
  * Two unique keys do that work:
  *
- *  - `messages.external_id` (unique, 0001_init.sql) — the provider's message id.
- *  - `clients.email` (unique, 0004_clients.sql) — one client per address.
+ *  - `messages.external_id` (unique, 20260731150000_init.sql) — the provider's message id.
+ *  - `clients.email` (unique, 20260731150300_clients.sql) — one client per address.
  *
  * Both are used as `ON CONFLICT` arbiters with ignore-duplicates, so a repeat is
  * a no-op decided by Postgres rather than by a check-then-write in application
@@ -44,7 +44,7 @@ const OVERLAP_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Emails are stored lower-cased and trimmed; the CHECK constraint added in
- * 0004_clients.sql enforces it, and matching an inbound sender to an existing
+ * 20260731150300_clients.sql enforces it, and matching an inbound sender to an existing
  * client depends on it.
  */
 export function normalizeEmail(raw: string | null | undefined): string | null {

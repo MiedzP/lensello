@@ -1,6 +1,6 @@
 -- Gigs module: integration provenance columns.
 --
--- 0001_init.sql created `gigs` with no place to record what the gig looks like
+-- 20260731150000_init.sql created `gigs` with no place to record what the gig looks like
 -- in the outside world. The module needs three things it could not otherwise
 -- persist:
 --

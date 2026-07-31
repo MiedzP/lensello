@@ -1,7 +1,7 @@
 /**
  * Gigs module row types.
  *
- * `supabase/migrations/0005_gigs.sql` adds five columns to `public.gigs` that
+ * `supabase/migrations/20260731150400_gigs.sql` adds five columns to `public.gigs` that
  * are not in the shared `@/lib/db.types` (that file is owned by the schema as a
  * whole and is being edited by nobody during this build, so it would be a merge
  * conflict waiting to happen). They are declared here and cast at the query
@@ -15,7 +15,7 @@ import { GIG_STATUSES } from '@lensello/core';
 import type { Tone } from '@/components/ui';
 import type { Tables, TablesInsert, TablesUpdate } from '@/lib/db.types';
 
-/** Columns added by 0005_gigs.sql. Not yet in the shared db.types. */
+/** Columns added by 20260731150400_gigs.sql. Not yet in the shared db.types. */
 export interface GigIntegrationColumns {
   /** Adapter event id. Set on confirm, cleared on cancel. */
   calendar_event_id: string | null;

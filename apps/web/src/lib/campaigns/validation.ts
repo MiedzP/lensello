@@ -22,7 +22,7 @@ import {
 
 /** Instagram's cap, and the tightest of the four platforms. Mirrors the CHECK. */
 export const MAX_CAPTION_LENGTH = 2200;
-/** Instagram carousel cap. Mirrors the CHECK in 0003_campaigns.sql. */
+/** Instagram carousel cap. Mirrors the CHECK in 20260731150200_campaigns.sql. */
 export const MAX_ASSETS_PER_POST = 10;
 export const MAX_HASHTAGS = 15;
 export const MIN_POST_COUNT = 1;
