@@ -20,6 +20,7 @@
 import { createMockIntegrations } from './mock';
 import { createPostmarkMailClient, isPostmarkConfigured } from './live/postmark';
 import { createMetaSocialGateway, isMetaConfigured } from './live/meta';
+import { createStripePaymentClient, isStripeConfigured } from './live/stripe';
 import {
   IntegrationError,
   NotImplementedError,
@@ -113,8 +114,12 @@ export function getIntegrations(): Integrations {
   });
 
   const payments = lazy<PaymentClient>(() => {
+    if (isStripeConfigured()) return createStripePaymentClient();
     if (mode === 'mock') return mocks.payments;
-    throw new NotImplementedError('stripe', 'payments');
+    throw new NotImplementedError(
+      'stripe',
+      'deposits and invoices. Set STRIPE_SECRET_KEY',
+    );
   });
 
   cached = {
@@ -150,6 +155,7 @@ export function integrationStatus(): {
   mode: IntegrationMode;
   social: 'live' | 'mock' | 'unavailable';
   mail: 'live' | 'mock' | 'unavailable';
+  payments: 'live' | 'mock' | 'unavailable';
 } {
   const mode = resolveMode();
   const describe = (configured: boolean) =>
@@ -159,6 +165,7 @@ export function integrationStatus(): {
     mode,
     social: describe(isMetaConfigured()),
     mail: describe(isPostmarkConfigured()),
+    payments: describe(isStripeConfigured()),
   };
 }
 

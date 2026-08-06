@@ -353,10 +353,30 @@ export interface AdPerformance {
 
 // --- helpers ------------------------------------------------------------
 
+/**
+ * Money, in the studio's own currency.
+ *
+ * Configurable because this was hardcoded to USD while the business it serves
+ * operates in the UK — which is merely ugly on a dashboard and materially
+ * wrong on a contract, where the figure a client agrees to is the figure in
+ * this string.
+ *
+ * `NEXT_PUBLIC_` because this renders in Client Components as well as on the
+ * server; without the prefix the browser bundle would get `undefined` and
+ * silently fall back, so the same fee could display differently in two places.
+ */
+export function currencyCode(): string {
+  return process.env.NEXT_PUBLIC_LENSELLO_CURRENCY?.trim().toUpperCase() || 'GBP';
+}
+
+export function currencyLocale(): string {
+  return process.env.NEXT_PUBLIC_LENSELLO_LOCALE?.trim() || 'en-GB';
+}
+
 export function formatCents(cents: Cents): string {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat(currencyLocale(), {
     style: 'currency',
-    currency: 'USD',
+    currency: currencyCode(),
     minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
   }).format(cents / 100);
 }
