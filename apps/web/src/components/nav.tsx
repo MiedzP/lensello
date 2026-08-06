@@ -7,7 +7,9 @@ import {
   LayoutDashboard,
   Megaphone,
   MessagesSquare,
+  Share2,
   Target,
+  Users,
   CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -19,6 +21,8 @@ const LINKS = [
   { href: '/clients', label: 'Clients', icon: MessagesSquare },
   { href: '/gigs', label: 'Gigs', icon: CalendarDays },
   { href: '/ads', label: 'Ads', icon: Target },
+  { href: '/connections', label: 'Connections', icon: Share2 },
+  { href: '/staff', label: 'Staff', icon: Users },
 ] as const;
 
 export function Nav() {

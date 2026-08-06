@@ -68,6 +68,14 @@ export interface PublishPostInput {
   imageUrls: string[];
   /** Omit to publish immediately. */
   scheduledFor?: Timestamp;
+  /**
+   * Token for the linked account being published to.
+   *
+   * Optional because the mock ignores it. A live adapter must reject a call
+   * that arrives without one rather than falling back to any ambient
+   * credential — publishing to the wrong studio account is not recoverable.
+   */
+  accessToken?: string;
 }
 
 export interface SocialPublisher {
@@ -77,6 +85,103 @@ export interface SocialPublisher {
   /** Best-effort delete. Platforms differ on whether this is possible. */
   unpublish(externalId: string): Promise<void>;
 }
+
+// --- linking an account (OAuth) -----------------------------------------
+
+export interface SocialAuthorization {
+  /** Where to send the browser to grant access. */
+  url: string;
+  /**
+   * PKCE verifier the callback must present, for providers that require one.
+   * Null when the flow does not use PKCE.
+   */
+  codeVerifier: string | null;
+}
+
+/** Everything needed to persist a newly linked account. */
+export interface SocialConnection {
+  platform: SocialPlatform;
+  handle: string;
+  displayName: string;
+  followers: number;
+  externalAccountId: string | null;
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: Timestamp | null;
+  scopes: string[];
+  /**
+   * What the granted scopes actually permit. Reported by the adapter rather
+   * than assumed per platform: the same platform grants different capabilities
+   * depending on what the user consented to, and on whether the app has been
+   * through review.
+   */
+  canPublish: boolean;
+  canCollectMessages: boolean;
+}
+
+export interface SocialOAuth {
+  /**
+   * `redirectUri` must exactly match one registered with the provider.
+   *
+   * `state` is generated and stored by the caller, not by the adapter — it has
+   * to be compared against something the browser carries back, and only the
+   * caller owns that cookie. Without the comparison, a third party can walk a
+   * staff member into linking an account the studio does not own.
+   */
+  beginAuthorization(input: {
+    platform: SocialPlatform;
+    redirectUri: string;
+    state: string;
+  }): Promise<SocialAuthorization>;
+
+  completeAuthorization(input: {
+    platform: SocialPlatform;
+    code: string;
+    redirectUri: string;
+    codeVerifier?: string | null;
+  }): Promise<SocialConnection>;
+
+  /** Best effort. An already-revoked or expired token is not an error. */
+  revoke(input: {
+    platform: SocialPlatform;
+    accessToken: string;
+  }): Promise<void>;
+}
+
+// --- inbound social messages --------------------------------------------
+
+/** A DM, comment, or mention. All three can be an inquiry worth replying to. */
+export interface SocialMessage {
+  externalId: string;
+  platform: SocialPlatform;
+  /** As the platform reports it. Normalize before using it as a key. */
+  fromHandle: string;
+  fromName: string;
+  kind: 'direct_message' | 'comment' | 'mention';
+  body: string;
+  receivedAt: Timestamp;
+  /** The post being commented on, when the message is not a DM. */
+  contextUrl: string | null;
+}
+
+export interface SocialInbox {
+  /** Newest first. `since` narrows the sync window. */
+  fetchMessages(input: {
+    platform: SocialPlatform;
+    accessToken: string;
+    since?: Timestamp;
+  }): Promise<SocialMessage[]>;
+}
+
+/**
+ * Everything Lensello does with a social platform: link it, post to it, and
+ * read what comes back. Composed from the three interfaces above so each can
+ * be implemented and reasoned about separately.
+ */
+export interface SocialGateway
+  extends SocialPublisher,
+    SocialOAuth,
+    SocialInbox {}
 
 // --- advertising --------------------------------------------------------
 
@@ -197,7 +302,7 @@ export type IntegrationMode = 'mock' | 'live';
 
 export interface Integrations {
   readonly mode: IntegrationMode;
-  readonly social: SocialPublisher;
+  readonly social: SocialGateway;
   readonly ads: AdManager;
   readonly mail: MailClient;
   readonly calendar: CalendarClient;

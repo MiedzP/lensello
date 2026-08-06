@@ -29,6 +29,11 @@ import {
 import { buildCampaignPlanPrompt, buildCaptionPrompt } from '@lensello/core/ai';
 import { getIntegrations } from '@lensello/core/integrations';
 import { requireUser } from '@/lib/auth';
+import { createAdminClient } from '@/lib/supabase/admin';
+import {
+  getPublishableAccount,
+  readAccessToken,
+} from '@/lib/connections/queries';
 import { AiError, generateJson, isAiConfigured } from '@/lib/ai';
 import type { Tables, TablesInsert } from '@/lib/db.types';
 import { failed, ok, type ActionState } from '@/lib/campaigns/action-state';
@@ -775,12 +780,32 @@ async function publishOnePost(
     };
   }
 
+  // An unlinked platform is the same class of problem: an environment gap, not
+  // a content one, so the post keeps its status and stays publishable once the
+  // account is linked on /connections.
+  const account = await getPublishableAccount(db, post.platform);
+  if (!account) {
+    return {
+      ok: false,
+      detail: `${label}: ${post.platform} is not linked. Link it on Connections, then publish.`,
+    };
+  }
+
+  const accessToken = await readAccessToken(createAdminClient(), account.id);
+  if (!accessToken) {
+    return {
+      ok: false,
+      detail: `${label}: the ${post.platform} token has expired. Reconnect the account on Connections.`,
+    };
+  }
+
   try {
     const result = await social.publish({
       platform: post.platform,
       caption: post.caption,
       hashtags: post.hashtags,
       imageUrls,
+      accessToken,
     });
 
     const { error } = await db

@@ -9,7 +9,8 @@
  * `Math.random()`, so screenshots and tests are stable across runs.
  */
 
-import type { DateOnly, Timestamp } from '../types';
+import type { DateOnly, SocialPlatform, Timestamp } from '../types';
+import { IntegrationError } from './types';
 import type {
   AdManager,
   AdMetricRow,
@@ -26,7 +27,10 @@ import type {
   PublishResult,
   SendMailInput,
   SocialAccount,
-  SocialPublisher,
+  SocialAuthorization,
+  SocialConnection,
+  SocialGateway,
+  SocialMessage,
 } from './types';
 
 /** Small deterministic string hash, used in place of randomness. */
@@ -66,41 +70,108 @@ function eachDay(from: DateOnly, to: DateOnly): DateOnly[] {
 
 // --- social -------------------------------------------------------------
 
-class MockSocialPublisher implements SocialPublisher {
+/** The studio's own accounts, as each platform would report them. */
+const MOCK_STUDIO_ACCOUNTS: Record<
+  SocialPlatform,
+  { handle: string; displayName: string; followers: number }
+> = {
+  instagram: { handle: 'lensello', displayName: 'Lensello Photography', followers: 8420 },
+  facebook: { handle: 'lensellophoto', displayName: 'Lensello Photography', followers: 2110 },
+  tiktok: { handle: 'lensello', displayName: 'Lensello', followers: 1290 },
+  pinterest: { handle: 'lensello', displayName: 'Lensello', followers: 640 },
+};
+
+/**
+ * Inbound social messages, keyed by platform.
+ *
+ * Deliberately overlaps with the mail mock: "Priya Raman" writes in on both
+ * Instagram and email, which is what actually happens and is the case that
+ * proves dedup across channels works.
+ */
+const MOCK_SOCIAL_MESSAGES: Record<
+  SocialPlatform,
+  ReadonlyArray<Omit<SocialMessage, 'receivedAt' | 'platform'>>
+> = {
+  instagram: [
+    {
+      externalId: 'ig_dm_0001',
+      fromHandle: 'priya.and.dev',
+      fromName: 'Priya Raman',
+      kind: 'direct_message',
+      body:
+        "Hi! We're getting married Sept 14 at Willowmere Barn and love your " +
+        'golden-hour work. Are you free that date, and what does full-day ' +
+        'coverage run?',
+      contextUrl: null,
+    },
+    {
+      externalId: 'ig_cmt_0002',
+      fromHandle: 'haleyjmakes',
+      fromName: 'Haley J',
+      kind: 'comment',
+      body: 'This light is unreal 😍 do you do engagement sessions outside the city?',
+      contextUrl: 'https://example.invalid/instagram/p/post_lakeside',
+    },
+    {
+      externalId: 'ig_dm_0003',
+      fromHandle: 'northsidestudioco',
+      fromName: 'Northside Studio',
+      kind: 'direct_message',
+      body: 'Would you be open to a second-shooter swap this fall? We have three weddings.',
+      contextUrl: null,
+    },
+  ],
+  facebook: [
+    {
+      externalId: 'fb_dm_0001',
+      fromHandle: 'marcus.webb.90',
+      fromName: 'Marcus Webb',
+      kind: 'direct_message',
+      body:
+        'Hello — we need headshots for 14 people downtown, clean neutral ' +
+        'background. Cost and time on site?',
+      contextUrl: null,
+    },
+    {
+      externalId: 'fb_cmt_0002',
+      fromHandle: 'elena.fitzgerald',
+      fromName: 'Elena Fitzgerald',
+      kind: 'comment',
+      body: 'We did a session with you two years ago! Any October weekends open?',
+      contextUrl: 'https://example.invalid/facebook/p/post_fall_minis',
+    },
+  ],
+  tiktok: [
+    {
+      externalId: 'tt_cmt_0001',
+      fromHandle: 'tobiaslund',
+      fromName: 'Tobias Lund',
+      kind: 'comment',
+      body: 'Do you travel for engagement shoots? Is there a travel fee?',
+      contextUrl: 'https://example.invalid/tiktok/v/vid_lakeside',
+    },
+  ],
+  pinterest: [],
+};
+
+class MockSocialGateway implements SocialGateway {
   readonly provider = 'mock:social';
+
+  /** Accounts linked during this process lifetime, so the UI round-trips. */
+  private readonly linked = new Set<SocialPlatform>();
 
   async listAccounts(): Promise<SocialAccount[]> {
     await latency();
-    return [
-      {
-        platform: 'instagram',
-        handle: '@lensello',
-        displayName: 'Lensello Photography',
-        followers: 8420,
-        isConnected: true,
-      },
-      {
-        platform: 'facebook',
-        handle: 'lensellophoto',
-        displayName: 'Lensello Photography',
-        followers: 2110,
-        isConnected: true,
-      },
-      {
-        platform: 'tiktok',
-        handle: '@lensello',
-        displayName: 'Lensello',
-        followers: 1290,
-        isConnected: false,
-      },
-      {
-        platform: 'pinterest',
-        handle: 'lensello',
-        displayName: 'Lensello',
-        followers: 640,
-        isConnected: false,
-      },
-    ];
+    return (Object.keys(MOCK_STUDIO_ACCOUNTS) as SocialPlatform[]).map((platform) => {
+      const account = MOCK_STUDIO_ACCOUNTS[platform];
+      return {
+        platform,
+        handle: `@${account.handle}`,
+        displayName: account.displayName,
+        followers: account.followers,
+        isConnected: this.linked.has(platform),
+      };
+    });
   }
 
   async publish(input: PublishPostInput): Promise<PublishResult> {
@@ -116,6 +187,92 @@ class MockSocialPublisher implements SocialPublisher {
 
   async unpublish(): Promise<void> {
     await latency();
+  }
+
+  // --- oauth ------------------------------------------------------------
+
+  /**
+   * Points straight back at the caller's own callback with a usable code.
+   *
+   * A real provider would show a consent screen first. Short-circuiting it
+   * keeps the mock self-contained while still driving the genuine callback
+   * route — state comparison, token storage, and error handling all run for
+   * real, so the only untested step is the provider's own redirect.
+   */
+  async beginAuthorization(input: {
+    platform: SocialPlatform;
+    redirectUri: string;
+    state: string;
+  }): Promise<SocialAuthorization> {
+    await latency(120);
+    const code = mockId('code', `${input.platform}:${input.state}`);
+    const url = new URL(input.redirectUri);
+    url.searchParams.set('code', code);
+    url.searchParams.set('state', input.state);
+    return { url: url.toString(), codeVerifier: null };
+  }
+
+  async completeAuthorization(input: {
+    platform: SocialPlatform;
+    code: string;
+    redirectUri: string;
+    codeVerifier?: string | null;
+  }): Promise<SocialConnection> {
+    await latency(500);
+
+    // Mirrors a provider rejecting a replayed or forged code. Without this the
+    // callback's error path would never be exercised.
+    if (!input.code.startsWith('code_')) {
+      throw new IntegrationError(
+        'That authorization code is not valid or has already been used.',
+        'mock:social',
+      );
+    }
+
+    const account = MOCK_STUDIO_ACCOUNTS[input.platform];
+    this.linked.add(input.platform);
+
+    return {
+      platform: input.platform,
+      handle: account.handle,
+      displayName: account.displayName,
+      followers: account.followers,
+      externalAccountId: mockId('acct', input.platform),
+      accessToken: mockId('token', `${input.platform}:${input.code}`),
+      refreshToken: mockId('refresh', input.platform),
+      expiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+      scopes: ['profile', 'publish', 'messages'],
+      canPublish: true,
+      // Pinterest has no messaging product, so the mock does not pretend the
+      // scope exists. The connections page reads this, not a hardcoded list.
+      canCollectMessages: input.platform !== 'pinterest',
+    };
+  }
+
+  async revoke(input: { platform: SocialPlatform; accessToken: string }): Promise<void> {
+    await latency();
+    this.linked.delete(input.platform);
+  }
+
+  // --- inbox ------------------------------------------------------------
+
+  async fetchMessages(input: {
+    platform: SocialPlatform;
+    accessToken: string;
+    since?: Timestamp;
+  }): Promise<SocialMessage[]> {
+    await latency(350);
+    const now = Date.now();
+
+    const messages = MOCK_SOCIAL_MESSAGES[input.platform].map((message, index) => ({
+      ...message,
+      platform: input.platform,
+      receivedAt: new Date(now - (index * 11 + 2) * 60 * 60 * 1000).toISOString(),
+    }));
+
+    if (!input.since) return messages;
+    const cutoff = new Date(input.since).getTime();
+    return messages.filter((m) => new Date(m.receivedAt).getTime() > cutoff);
   }
 }
 
@@ -356,7 +513,7 @@ class MockPaymentClient implements PaymentClient {
 export function createMockIntegrations(): Integrations {
   return {
     mode: 'mock',
-    social: new MockSocialPublisher(),
+    social: new MockSocialGateway(),
     ads: new MockAdManager(),
     mail: new MockMailClient(),
     calendar: new MockCalendarClient(),

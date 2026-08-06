@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Camera } from 'lucide-react';
 import { LoginForm } from './login-form';
 
@@ -21,7 +22,11 @@ export default async function LoginPage(props: PageProps<'/login'>) {
         <LoginForm next={target} />
 
         <p className="mt-6 text-center text-xs text-faint">
-          Accounts are provisioned by the studio owner.
+          Need an account?{' '}
+          <Link href="/signup" className="text-accent hover:underline">
+            Create one
+          </Link>{' '}
+          with an invite code from the studio owner.
         </p>
       </div>
     </div>

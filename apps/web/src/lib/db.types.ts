@@ -1,7 +1,7 @@
 /**
  * Database types for the Lensello schema.
  *
- * Hand-written to mirror supabase/migrations/20260731150000_init.sql in the shape the
+ * Hand-written to mirror everything in supabase/migrations/ in the shape the
  * Supabase type generator emits, so it can be replaced wholesale once the CLI
  * is available:
  *
@@ -310,6 +310,12 @@ export interface Database {
           is_ai_draft: boolean;
           sent_at: string;
           external_id: string | null;
+          channel:
+            | 'email'
+            | 'instagram'
+            | 'facebook'
+            | 'tiktok'
+            | 'pinterest';
           created_at: string;
         };
         Insert: {
@@ -322,9 +328,101 @@ export interface Database {
           is_ai_draft?: boolean;
           sent_at?: string;
           external_id?: string | null;
+          channel?: Database['public']['Tables']['messages']['Row']['channel'];
         };
         Update: Partial<
           Omit<Database['public']['Tables']['messages']['Row'], 'id' | 'created_at'>
+        >;
+        Relationships: [];
+      };
+
+      social_accounts: {
+        Row: {
+          id: string;
+          platform: 'instagram' | 'facebook' | 'tiktok' | 'pinterest';
+          handle: string;
+          display_name: string;
+          followers: number;
+          status: 'connected' | 'expired' | 'revoked';
+          external_account_id: string | null;
+          can_publish: boolean;
+          can_collect_messages: boolean;
+          connected_by: string | null;
+          connected_at: string;
+          last_synced_at: string | null;
+          last_error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          platform: Database['public']['Tables']['social_accounts']['Row']['platform'];
+          handle: string;
+          display_name?: string;
+          followers?: number;
+          status?: Database['public']['Tables']['social_accounts']['Row']['status'];
+          external_account_id?: string | null;
+          can_publish?: boolean;
+          can_collect_messages?: boolean;
+          connected_by?: string | null;
+          connected_at?: string;
+          last_synced_at?: string | null;
+          last_error?: string | null;
+        };
+        Update: Partial<
+          Omit<
+            Database['public']['Tables']['social_accounts']['Row'],
+            'id' | 'created_at'
+          >
+        >;
+        Relationships: [];
+      };
+
+      /** Service-role only: RLS is enabled with no policies. */
+      social_account_secrets: {
+        Row: {
+          account_id: string;
+          access_token: string;
+          refresh_token: string | null;
+          expires_at: string | null;
+          scopes: string[];
+          updated_at: string;
+        };
+        Insert: {
+          account_id: string;
+          access_token: string;
+          refresh_token?: string | null;
+          expires_at?: string | null;
+          scopes?: string[];
+        };
+        Update: Partial<
+          Omit<
+            Database['public']['Tables']['social_account_secrets']['Row'],
+            'account_id'
+          >
+        >;
+        Relationships: [];
+      };
+
+      client_social_handles: {
+        Row: {
+          id: string;
+          client_id: string;
+          platform: 'instagram' | 'facebook' | 'tiktok' | 'pinterest';
+          handle: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          platform: Database['public']['Tables']['client_social_handles']['Row']['platform'];
+          handle: string;
+        };
+        Update: Partial<
+          Omit<
+            Database['public']['Tables']['client_social_handles']['Row'],
+            'id' | 'created_at'
+          >
         >;
         Relationships: [];
       };

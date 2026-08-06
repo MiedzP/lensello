@@ -13,7 +13,10 @@ import { createServerClient } from '@supabase/ssr';
  * protects data.
  */
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/auth/error'];
+const PUBLIC_PATHS = ['/login', '/signup', '/auth/callback', '/auth/error'];
+
+/** Signed-in visitors have no use for these and are sent to the dashboard. */
+const SIGNED_OUT_ONLY = ['/login', '/signup'];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -57,7 +60,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user && pathname === '/login') {
+  if (user && SIGNED_OUT_ONLY.includes(pathname)) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
