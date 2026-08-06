@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AD_SIZES,
   charsPerLine,
+  composeBlock,
   escapeXml,
   layoutFor,
   wrapText,
@@ -110,5 +111,50 @@ describe('escapeXml', () => {
 
   it('escapes the ampersand first, so escapes are not double-escaped', () => {
     expect(escapeXml('a & <b>')).toBe('a &amp; &lt;b&gt;');
+  });
+});
+
+describe('composeBlock', () => {
+  /**
+   * The regression this exists for: the block used to be anchored from a fixed
+   * fraction of the height, so a two-line headline over a two-line subline
+   * pushed the call-to-action pill past the bottom edge. Nothing errored — the
+   * button was simply absent from the exported file, and only looking at the
+   * PNG showed it.
+   */
+  it('keeps the whole block on the canvas at its tallest', () => {
+    for (const key of Object.keys(AD_SIZES) as (keyof typeof AD_SIZES)[]) {
+      const block = composeBlock({
+        ...base,
+        size: key,
+        headline: 'A headline long enough to wrap onto three separate lines here',
+        subline: 'And a supporting line that also wraps across two full lines of text',
+        callToAction: 'Check your date',
+      });
+
+      const bottom = block.blockTopPx + block.blockHeight;
+      expect(bottom).toBeLessThanOrEqual(AD_SIZES[key].height + 0.5);
+      expect(block.blockTopPx).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('sits the block against the bottom margin when anchored bottom', () => {
+    const block = composeBlock({ ...base, size: 'instagram_square' });
+    const bottom = block.blockTopPx + block.blockHeight;
+    expect(bottom).toBeCloseTo(AD_SIZES.instagram_square.height - block.padPx, 0);
+  });
+
+  it('centres the block vertically when asked', () => {
+    const block = composeBlock({ ...base, position: 'centre' });
+    const above = block.blockTopPx;
+    const below = AD_SIZES.instagram_square.height - (block.blockTopPx + block.blockHeight);
+    expect(Math.abs(above - below)).toBeLessThan(1);
+  });
+
+  it('reclaims the space when there is no call to action', () => {
+    const withCta = composeBlock({ ...base, callToAction: 'Check your date' });
+    const without = composeBlock({ ...base, callToAction: '' });
+    expect(without.blockHeight).toBeLessThan(withCta.blockHeight);
+    expect(without.ctaHeight).toBe(0);
   });
 });

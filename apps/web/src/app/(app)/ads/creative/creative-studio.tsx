@@ -16,9 +16,8 @@ import {
 import {
   AD_SIZES,
   AD_SIZE_KEYS,
-  charsPerLine,
+  composeBlock,
   layoutFor,
-  wrapText,
   type AdSizeKey,
   type CreativeInput,
   type TextPosition,
@@ -69,23 +68,16 @@ export function CreativeStudio({
     scrim,
   };
   const layout = layoutFor(input);
+  const block = composeBlock(input);
 
-  // The preview box is a fixed width; every size below is expressed as a
-  // fraction of the canvas, so scaling it here keeps CSS and sharp in step.
+  // The preview is a scaled copy of the real canvas, so every pixel value from
+  // composeBlock is multiplied by one ratio. Anything computed independently
+  // here would be a second source of truth, which is the bug this replaced.
   const previewWidth = 360;
   const previewHeight = (layout.height / layout.width) * previewWidth;
-  const px = (fractionOfHeight: number) => fractionOfHeight * previewHeight;
+  const scale = previewWidth / layout.width;
+  const px = (canvasPx: number) => canvasPx * scale;
 
-  const headlineLines = wrapText(
-    headline,
-    charsPerLine(layout.width, layout.headlineSize * layout.height, layout.padding * layout.height),
-    3,
-  );
-  const sublineLines = wrapText(
-    subline,
-    charsPerLine(layout.width, layout.sublineSize * layout.height, layout.padding * layout.height),
-    2,
-  );
 
   if (photos.length === 0) {
     return (
@@ -271,7 +263,7 @@ export function CreativeStudio({
               <div
                 className="absolute inset-0"
                 style={{
-                  background: `linear-gradient(to bottom, rgba(0,0,0,0) ${Math.max(0, layout.blockTop - 0.18) * 100}%, rgba(0,0,0,${layout.scrimOpacity}) 100%)`,
+                  background: `linear-gradient(to bottom, rgba(0,0,0,0) ${block.scrimStart * 100}%, rgba(0,0,0,${layout.scrimOpacity}) 100%)`,
                 }}
               />
 
@@ -279,9 +271,10 @@ export function CreativeStudio({
                 <p
                   className="absolute font-semibold uppercase text-white"
                   style={{
-                    left: px(layout.padding),
-                    top: px(layout.padding),
-                    fontSize: px(layout.studioSize),
+                    left: px(block.padPx),
+                    top: px(block.studioBaseline - block.studioPx),
+                    fontSize: px(block.studioPx),
+                    lineHeight: 1,
                     letterSpacing: '0.15em',
                   }}
                 >
@@ -289,50 +282,56 @@ export function CreativeStudio({
                 </p>
               ) : null}
 
-              <div
-                className="absolute"
-                style={{
-                  left: px(layout.padding),
-                  right: px(layout.padding),
-                  top: px(layout.blockTop),
-                }}
-              >
-                {headlineLines.map((line, index) => (
-                  <p
-                    key={index}
-                    className="font-bold text-white"
-                    style={{
-                      fontSize: px(layout.headlineSize),
-                      lineHeight: 1.12,
-                      letterSpacing: '-0.01em',
-                    }}
-                  >
-                    {line}
-                  </p>
-                ))}
+              {/* Absolutely positioned from the same baselines the renderer
+                  uses, rather than left to normal flow. Flow would drift from
+                  the export the moment a line height differed. */}
+              {block.headlineLines.map((line, index) => (
+                <p
+                  key={`h${index}`}
+                  className="absolute font-bold text-white"
+                  style={{
+                    left: px(block.padPx),
+                    right: px(block.padPx),
+                    top: px(block.headlineBaselines[index]! - block.headlinePx),
+                    fontSize: px(block.headlinePx),
+                    lineHeight: 1,
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  {line}
+                </p>
+              ))}
 
-                {sublineLines.map((line, index) => (
-                  <p
-                    key={index}
-                    className="text-white/90"
-                    style={{ fontSize: px(layout.sublineSize), lineHeight: 1.3 }}
-                  >
-                    {line}
-                  </p>
-                ))}
+              {block.sublineLines.map((line, index) => (
+                <p
+                  key={`s${index}`}
+                  className="absolute text-white/90"
+                  style={{
+                    left: px(block.padPx),
+                    right: px(block.padPx),
+                    top: px(block.sublineBaselines[index]! - block.sublinePx),
+                    fontSize: px(block.sublinePx),
+                    lineHeight: 1,
+                  }}
+                >
+                  {line}
+                </p>
+              ))}
 
-                {callToAction ? (
-                  <span
-                    className="mt-3 inline-block rounded-full bg-white font-semibold text-black"
-                    style={{
-                      fontSize: px(layout.ctaSize),
-                      padding: `${px(layout.ctaSize) * 0.6}px ${px(layout.ctaSize) * 0.9}px`,
-                    }}
-                  >
-                    {callToAction}
-                  </span>
-                ) : null}
-              </div>
+              {callToAction && block.ctaTop !== null ? (
+                <span
+                  className="absolute inline-flex items-center justify-center rounded-full bg-white font-semibold text-black"
+                  style={{
+                    left: px(block.padPx),
+                    top: px(block.ctaTop),
+                    width: px(block.ctaWidth),
+                    height: px(block.ctaHeight),
+                    fontSize: px(block.ctaPx),
+                  }}
+                >
+                  {callToAction}
+                </span>
+              ) : null}
             </div>
           </CardBody>
         </Card>

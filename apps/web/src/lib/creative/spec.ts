@@ -124,6 +124,129 @@ export function charsPerLine(canvasWidth: number, fontSizePx: number, padding: n
   return Math.max(8, Math.floor(usable / (fontSizePx * 0.52)));
 }
 
+export interface ComposedBlock {
+  headlineLines: string[];
+  sublineLines: string[];
+  /** Absolute y of each text baseline, in canvas pixels. */
+  headlineBaselines: number[];
+  sublineBaselines: number[];
+  /** Absolute top-left of the call-to-action pill. Null when there is none. */
+  ctaTop: number | null;
+  studioBaseline: number;
+  padPx: number;
+  headlinePx: number;
+  sublinePx: number;
+  ctaPx: number;
+  studioPx: number;
+  ctaWidth: number;
+  ctaHeight: number;
+  blockHeight: number;
+  blockTopPx: number;
+  scrimStart: number;
+}
+
+const HEADLINE_LINE_HEIGHT = 1.12;
+const SUBLINE_LINE_HEIGHT = 1.3;
+const HEADLINE_LINES = 3;
+const SUBLINE_LINES = 2;
+
+/**
+ * Lays the text block out and returns finished coordinates.
+ *
+ * Callers consume positions; they do not compute them. That is the whole point
+ * of this function existing. When the renderer and the measurer each did their
+ * own arithmetic they drifted twice in a row — first the call-to-action fell
+ * off the bottom of the canvas, then the supporting line landed on top of the
+ * headline. Neither raised an error; both were only visible by looking at the
+ * exported PNG.
+ *
+ * Laid out from zero, measured, then offset — so the anchoring rule lives in
+ * one place and the geometry above it never has to know about it.
+ */
+export function composeBlock(input: CreativeInput): ComposedBlock {
+  const layout = layoutFor(input);
+  const { width, height } = layout;
+
+  const padPx = layout.padding * height;
+  const headlinePx = layout.headlineSize * height;
+  const sublinePx = layout.sublineSize * height;
+  const ctaPx = layout.ctaSize * height;
+  const studioPx = layout.studioSize * height;
+
+  const headlineLines = wrapText(
+    input.headline,
+    charsPerLine(width, headlinePx, padPx),
+    HEADLINE_LINES,
+  );
+  const sublineLines = wrapText(
+    input.subline,
+    charsPerLine(width, sublinePx, padPx),
+    SUBLINE_LINES,
+  );
+
+  const cta = input.callToAction.trim();
+  const ctaHeight = cta ? ctaPx * 2.2 : 0;
+  const ctaWidth = cta ? cta.length * ctaPx * 0.58 + ctaPx * 1.8 : 0;
+
+  // --- pass one: lay out from zero -----------------------------------------
+  let cursor = 0;
+
+  const headlineBaselines = headlineLines.map((_, index) => {
+    // Text is baseline-positioned, so the first baseline sits an ascender below
+    // the top edge. One font-size is a generous stand-in for the ascender.
+    if (index === 0) return cursor + headlinePx;
+    return cursor + headlinePx + index * headlinePx * HEADLINE_LINE_HEIGHT;
+  });
+
+  if (headlineLines.length > 0) {
+    // Past the last baseline, plus room for its descenders — without this the
+    // next element sits on top of the line above.
+    cursor =
+      headlineBaselines[headlineBaselines.length - 1]! + headlinePx * 0.28;
+  }
+
+  const sublineBaselines = sublineLines.map((_, index) => {
+    const first = cursor + sublinePx;
+    return first + index * sublinePx * SUBLINE_LINE_HEIGHT;
+  });
+
+  if (sublineLines.length > 0) {
+    cursor = sublineBaselines[sublineBaselines.length - 1]! + sublinePx * 0.3;
+  }
+
+  const ctaTopRelative = cta ? cursor + ctaPx * 0.6 : null;
+  if (ctaTopRelative !== null) cursor = ctaTopRelative + ctaHeight;
+
+  const blockHeight = cursor;
+
+  // --- pass two: anchor and offset -----------------------------------------
+  const blockTopPx =
+    input.position === 'centre'
+      ? Math.max(padPx, (height - blockHeight) / 2)
+      : Math.max(padPx, height - padPx - blockHeight);
+
+  return {
+    headlineLines,
+    sublineLines,
+    headlineBaselines: headlineBaselines.map((y) => y + blockTopPx),
+    sublineBaselines: sublineBaselines.map((y) => y + blockTopPx),
+    ctaTop: ctaTopRelative === null ? null : ctaTopRelative + blockTopPx,
+    studioBaseline: padPx + studioPx,
+    padPx,
+    headlinePx,
+    sublinePx,
+    ctaPx,
+    studioPx,
+    ctaWidth,
+    ctaHeight,
+    blockHeight,
+    blockTopPx,
+    scrimStart: Math.max(0, blockTopPx / height - 0.18),
+  };
+}
+
+export { HEADLINE_LINE_HEIGHT, SUBLINE_LINE_HEIGHT };
+
 /** Escapes text for embedding in SVG. Unescaped `&` alone breaks the render. */
 export function escapeXml(value: string): string {
   return value
