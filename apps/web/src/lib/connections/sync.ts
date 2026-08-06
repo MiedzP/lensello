@@ -106,7 +106,7 @@ async function resolveSince(
 async function resolveClients(
   supabase: Supabase,
   platform: SocialPlatform,
-  senders: Map<string, string>,
+  senders: Map<string, { name: string; externalId: string | null }>,
 ): Promise<{ ids: Map<string, string>; created: number }> {
   const handles = [...senders.keys()];
   const ids = new Map<string, string>();
@@ -126,7 +126,7 @@ async function resolveClients(
   const clientRows: TablesInsert<'clients'>[] = missing.map((handle) => ({
     // A handle that has only ever messaged us is a lead. Promoting it is a
     // judgement call for a human, not for a sync job.
-    name: senders.get(handle) || handle,
+    name: senders.get(handle)?.name || handle,
     stage: 'lead',
     source: sourceFor(platform),
   }));
@@ -147,6 +147,8 @@ async function resolveClients(
       client_id: createdIds[index]!,
       platform,
       handle,
+      // Without this a DM can be filed but never answered.
+      external_user_id: senders.get(handle)?.externalId ?? null,
     }),
   );
 
@@ -215,7 +217,7 @@ export async function syncSocialMessages(
   // Deduplicate within the payload as well as against the table: a provider can
   // return the same message twice in one page.
   const usable = new Map<string, { message: SocialMessage; handle: string }>();
-  const senders = new Map<string, string>();
+  const senders = new Map<string, { name: string; externalId: string | null }>();
 
   for (const message of fetched) {
     const handle = normalizeHandle(message.fromHandle);
@@ -230,7 +232,12 @@ export async function syncSocialMessages(
     if (usable.has(externalId)) continue;
 
     usable.set(externalId, { message, handle });
-    if (!senders.has(handle)) senders.set(handle, message.fromName.trim() || handle);
+    if (!senders.has(handle)) {
+      senders.set(handle, {
+        name: message.fromName.trim() || handle,
+        externalId: message.fromExternalId,
+      });
+    }
   }
 
   const { ids, created } = await resolveClients(supabase, platform, senders);

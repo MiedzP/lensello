@@ -90,7 +90,7 @@ const MOCK_STUDIO_ACCOUNTS: Record<
  */
 const MOCK_SOCIAL_MESSAGES: Record<
   SocialPlatform,
-  ReadonlyArray<Omit<SocialMessage, 'receivedAt' | 'platform'>>
+  ReadonlyArray<Omit<SocialMessage, 'receivedAt' | 'platform' | 'fromExternalId'>>
 > = {
   instagram: [
     {
@@ -256,6 +256,20 @@ class MockSocialGateway implements SocialGateway {
 
   // --- inbox ------------------------------------------------------------
 
+  async sendMessage(input: {
+    platform: SocialPlatform;
+    accessToken: string;
+    toExternalId: string;
+    body: string;
+  }): Promise<PublishResult> {
+    await latency(400);
+    return {
+      externalId: mockId('dm', `${input.platform}:${input.toExternalId}:${input.body}`),
+      url: null,
+      publishedAt: new Date().toISOString(),
+    };
+  }
+
   async fetchMessages(input: {
     platform: SocialPlatform;
     accessToken: string;
@@ -267,6 +281,9 @@ class MockSocialGateway implements SocialGateway {
     const messages = MOCK_SOCIAL_MESSAGES[input.platform].map((message, index) => ({
       ...message,
       platform: input.platform,
+      // Derived from the handle so it is stable across runs, the way a real
+      // scoped id is stable for a given sender.
+      fromExternalId: mockId('igsid', `${input.platform}:${message.fromHandle}`),
       receivedAt: new Date(now - (index * 11 + 2) * 60 * 60 * 1000).toISOString(),
     }));
 

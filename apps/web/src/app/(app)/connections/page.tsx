@@ -4,7 +4,10 @@ import { getIntegrations } from '@lensello/core/integrations';
 import { Card, CardBody, ErrorNote, PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
 import { listConnections } from '@/lib/connections/queries';
+import { getPrimaryMailbox } from '@/lib/mailboxes/queries';
+import { isEncryptionConfigured } from '@/lib/crypto/secret-box';
 import { ConnectionCard } from './components/connection-card';
+import { MailboxCard, type MailboxView } from './components/mailbox-card';
 import { SyncMessagesForm } from './components/sync-messages-form';
 
 export const metadata: Metadata = { title: 'Connections' };
@@ -39,6 +42,27 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
   const reason = typeof params.reason === 'string' ? params.reason : null;
 
   const connections = await listConnections(supabase);
+
+  const mailbox = await getPrimaryMailbox(supabase);
+  const encryptionReady = isEncryptionConfigured();
+
+  const mailboxView: MailboxView | null = mailbox
+    ? {
+        id: mailbox.id,
+        emailAddress: mailbox.email_address,
+        displayName: mailbox.display_name,
+        imapHost: mailbox.imap_host,
+        smtpHost: mailbox.smtp_host,
+        status: mailbox.status,
+        lastError: mailbox.last_error,
+        lastSyncedLabel: mailbox.last_synced_at
+          ? new Date(mailbox.last_synced_at).toLocaleString('en-US', {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            })
+          : 'never',
+      }
+    : null;
 
   // `getIntegrations()` throws outright when the mode is `live`, because no
   // live adapter exists yet. Catching it here turns a crashed page into an
@@ -100,11 +124,19 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
         </Card>
       ) : null}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        {connections.map(({ platform, account }) => (
-          <ConnectionCard key={platform} platform={platform} account={account} />
-        ))}
-      </div>
+      <section className="mt-6 space-y-3">
+        <h2 className="text-sm font-semibold text-foreground">Email</h2>
+        <MailboxCard mailbox={mailboxView} encryptionReady={encryptionReady} />
+      </section>
+
+      <section className="mt-6 space-y-3">
+        <h2 className="text-sm font-semibold text-foreground">Social accounts</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {connections.map(({ platform, account }) => (
+            <ConnectionCard key={platform} platform={platform} account={account} />
+          ))}
+        </div>
+      </section>
 
       <Card className="mt-6">
         <CardBody className="flex gap-3 text-sm text-muted">

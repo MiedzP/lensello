@@ -156,6 +156,14 @@ export interface SocialMessage {
   platform: SocialPlatform;
   /** As the platform reports it. Normalize before using it as a key. */
   fromHandle: string;
+  /**
+   * The platform's own id for the sender.
+   *
+   * Required to reply: messaging APIs address a scoped user id, not a handle.
+   * Null when the platform does not supply one, in which case a reply cannot
+   * be sent and the caller must say so rather than guess a recipient.
+   */
+  fromExternalId: string | null;
   fromName: string;
   kind: 'direct_message' | 'comment' | 'mention';
   body: string;
@@ -171,6 +179,21 @@ export interface SocialInbox {
     accessToken: string;
     since?: Timestamp;
   }): Promise<SocialMessage[]>;
+
+  /**
+   * Replies to a conversation on the platform it happened on.
+   *
+   * `toExternalId` is the recipient's scoped id from `SocialMessage`. There is
+   * deliberately no handle-based overload: handles are display names, they get
+   * changed and reused, and sending a client's quote to whoever holds the
+   * handle today is not a recoverable mistake.
+   */
+  sendMessage(input: {
+    platform: SocialPlatform;
+    accessToken: string;
+    toExternalId: string;
+    body: string;
+  }): Promise<PublishResult>;
 }
 
 /**

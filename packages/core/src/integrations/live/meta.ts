@@ -359,6 +359,34 @@ class MetaSocialGateway implements SocialGateway {
 
   // --- messages ---------------------------------------------------------
 
+  async sendMessage(input: {
+    platform: SocialPlatform;
+    accessToken: string;
+    toExternalId: string;
+    body: string;
+  }): Promise<PublishResult> {
+    assertInstagram(input.platform);
+
+    // Instagram only permits a reply inside the 24-hour window after the
+    // client's last message. Outside it the API rejects the send, which is
+    // correct behaviour to surface rather than work around.
+    const result = await graph<{ message_id?: string; id?: string }>('/me/messages', {
+      method: 'POST',
+      token: input.accessToken,
+      body: {
+        recipient: JSON.stringify({ id: input.toExternalId }),
+        message: JSON.stringify({ text: input.body }),
+        messaging_type: 'RESPONSE',
+      },
+    });
+
+    return {
+      externalId: result.message_id ?? result.id ?? `ig_dm_${Date.now()}`,
+      url: null,
+      publishedAt: new Date().toISOString(),
+    };
+  }
+
   async fetchMessages(input: {
     platform: SocialPlatform;
     accessToken: string;
@@ -405,6 +433,8 @@ class MetaSocialGateway implements SocialGateway {
           externalId: message.id,
           platform: 'instagram',
           fromHandle: handle,
+          // The IGSID. This, not the handle, is what a reply is addressed to.
+          fromExternalId: message.from?.id ?? null,
           fromName: message.from?.name?.trim() || handle,
           kind: 'direct_message',
           body: message.message,

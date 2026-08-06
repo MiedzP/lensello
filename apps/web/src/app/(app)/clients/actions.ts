@@ -23,10 +23,20 @@
  */
 
 import { revalidatePath } from 'next/cache';
-import { IntegrationError, getIntegrations } from '@lensello/core/integrations';
-import type { ClientStage } from '@lensello/core';
-import { requireUser } from '@/lib/auth';
-import type { TablesInsert } from '@/lib/db.types';
+import {
+  IntegrationError,
+  getIntegrations,
+  type PublishResult,
+} from '@lensello/core/integrations';
+import type { ClientStage, SocialPlatform } from '@lensello/core';
+import { requireUser, type Session } from '@/lib/auth';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { resolveMailClient } from '@/lib/mailboxes/queries';
+import {
+  getPublishableAccount,
+  readAccessToken,
+} from '@/lib/connections/queries';
+import type { Tables, TablesInsert } from '@/lib/db.types';
 import { DraftError, draftClientReply, type UsedFacts } from '@/lib/clients/draft';
 import {
   clientRecordSchema,
@@ -311,6 +321,103 @@ export const INITIAL_SEND: SendState = {
   sentCount: 0,
 };
 
+type MessageChannel = Tables<'messages'>['channel'];
+
+/**
+ * Sends a reply as email, from the connected studio mailbox when there is one.
+ *
+ * Falls back to whatever the integration registry provides, so replies still
+ * work while a mailbox is being set up.
+ */
+async function sendByEmail(
+  supabase: Session['supabase'],
+  input: {
+    client: { name: string; email: string | null };
+    subject: string;
+    body: string;
+    inReplyToExternalId?: string;
+  },
+): Promise<PublishResult> {
+  if (!input.client.email) {
+    throw new IntegrationError(
+      'This client has no email address. Add one to the record before replying.',
+      'mail',
+    );
+  }
+
+  const { mail } = await resolveMailClient(supabase, createAdminClient());
+
+  return mail.send({
+    toEmail: input.client.email,
+    toName: input.client.name,
+    subject: input.subject,
+    body: input.body,
+    ...(input.inReplyToExternalId ? { inReplyTo: input.inReplyToExternalId } : {}),
+  });
+}
+
+/**
+ * Sends a reply as a direct message on the platform the client wrote in on.
+ *
+ * Addressed by the sender's platform-scoped id, never by handle — handles get
+ * changed and reused, and a quote sent to whoever holds the handle today is not
+ * a recoverable mistake. A handle recorded before ids were captured has none,
+ * and that is reported rather than worked around.
+ */
+async function sendByDirectMessage(
+  supabase: Session['supabase'],
+  input: { clientId: string; channel: MessageChannel; body: string },
+): Promise<PublishResult> {
+  const platform = input.channel as SocialPlatform;
+
+  const { data: handle } = await supabase
+    .from('client_social_handles')
+    .select('handle, external_user_id')
+    .eq('client_id', input.clientId)
+    .eq('platform', platform)
+    .maybeSingle();
+
+  if (!handle) {
+    throw new IntegrationError(
+      `This client has no ${platform} handle on record, so there is nowhere to send the reply.`,
+      platform,
+    );
+  }
+
+  if (!handle.external_user_id) {
+    throw new IntegrationError(
+      `The ${platform} sender id for @${handle.handle} was never captured, so a ` +
+        'reply cannot be addressed. Collect messages again to record it.',
+      platform,
+    );
+  }
+
+  const admin = createAdminClient();
+  const account = await getPublishableAccount(supabase, platform);
+
+  if (!account) {
+    throw new IntegrationError(
+      `${platform} is not linked, so the reply cannot be sent. Link it on Connections.`,
+      platform,
+    );
+  }
+
+  const accessToken = await readAccessToken(admin, account.id);
+  if (!accessToken) {
+    throw new IntegrationError(
+      `The ${platform} token has expired. Reconnect the account on Connections.`,
+      platform,
+    );
+  }
+
+  return getIntegrations().social.sendMessage({
+    platform,
+    accessToken,
+    toExternalId: handle.external_user_id,
+    body: input.body,
+  });
+}
+
 export async function sendReplyAction(
   previous: SendState,
   formData: FormData,
@@ -345,19 +452,21 @@ export async function sendReplyAction(
     .maybeSingle();
 
   if (!client) return fail('That client no longer exists.');
-  if (!client.email) {
-    return fail(
-      'This client has no email address. Add one to the record before replying.',
-    );
-  }
 
   // Resolve the message being answered before anything leaves the building, so a
-  // stale or mismatched id fails cheaply rather than after the mail is sent.
+  // stale or mismatched id fails cheaply rather than after the reply is sent.
+  //
+  // The channel comes from the message being answered, not from a setting:
+  // somebody who wrote in on Instagram expects the answer on Instagram, and
+  // emailing them instead arrives out of nowhere from an address they never
+  // contacted.
   let inReplyToExternalId: string | undefined;
+  let channel: MessageChannel = 'email';
+
   if (inReplyToMessageId) {
     const { data: inbound } = await supabase
       .from('messages')
-      .select('id, external_id, direction')
+      .select('id, external_id, direction, channel')
       .eq('id', inReplyToMessageId)
       .eq('client_id', clientId)
       .maybeSingle();
@@ -366,17 +475,28 @@ export async function sendReplyAction(
       return fail('That message is not part of this conversation.');
     }
     inReplyToExternalId = inbound.external_id ?? undefined;
+    channel = inbound.channel;
+  } else {
+    // A fresh message with nothing to answer: use whatever channel this client
+    // last reached us on, falling back to email.
+    const { data: latest } = await supabase
+      .from('messages')
+      .select('channel')
+      .eq('client_id', clientId)
+      .eq('direction', 'inbound')
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (latest) channel = latest.channel;
   }
 
   let result;
   try {
-    result = await getIntegrations().mail.send({
-      toEmail: client.email,
-      toName: client.name,
-      subject,
-      body,
-      ...(inReplyToExternalId ? { inReplyTo: inReplyToExternalId } : {}),
-    });
+    result =
+      channel === 'email'
+        ? await sendByEmail(supabase, { client, subject, body, inReplyToExternalId })
+        : await sendByDirectMessage(supabase, { clientId, channel, body });
   } catch (cause) {
     // Nothing is recorded. A `messages` row for mail that never left would be
     // worse than the failure itself — it is the kind of lie you find out about
@@ -393,6 +513,7 @@ export async function sendReplyAction(
   const outbound: TablesInsert<'messages'> = {
     client_id: clientId,
     direction: 'outbound',
+    channel,
     subject,
     body,
     // Outbound mail is not a task; it is the completed task.

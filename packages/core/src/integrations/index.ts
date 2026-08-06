@@ -38,6 +38,13 @@ export { createMockIntegrations } from './mock';
 // polling adapter uses, so pushed and pulled copies of one email produce
 // identical rows.
 export { toInboundMessage } from './live/postmark';
+// A connected mailbox is built per request from credentials in the database,
+// not from the environment, so it is not part of the registry below.
+export {
+  createMailboxClient,
+  guessHosts,
+  type MailboxConfig,
+} from './live/mailbox';
 
 let cached: Integrations | null = null;
 

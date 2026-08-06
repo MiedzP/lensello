@@ -11,9 +11,12 @@
     "./ai": "./src/ai/index.ts"
   },
   "dependencies": {
+    "imapflow": "^1.6.5",
+    "nodemailer": "^9.0.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.1",
     "typescript": "^5"
   }
 }

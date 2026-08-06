@@ -404,12 +404,80 @@ export interface Database {
         Relationships: [];
       };
 
+      mailboxes: {
+        Row: {
+          id: string;
+          email_address: string;
+          display_name: string;
+          imap_host: string;
+          imap_port: number;
+          smtp_host: string;
+          smtp_port: number;
+          status: 'connected' | 'failing' | 'disabled';
+          last_error: string | null;
+          last_synced_at: string | null;
+          connected_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          email_address: string;
+          display_name?: string;
+          imap_host: string;
+          imap_port?: number;
+          smtp_host: string;
+          smtp_port?: number;
+          status?: Database['public']['Tables']['mailboxes']['Row']['status'];
+          last_error?: string | null;
+          last_synced_at?: string | null;
+          connected_by?: string | null;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['mailboxes']['Row'], 'id' | 'created_at'>
+        >;
+        Relationships: [];
+      };
+
+      mailbox_roles: {
+        Row: {
+          mailbox_id: string;
+          is_primary: boolean;
+        };
+        Insert: {
+          mailbox_id: string;
+          is_primary?: boolean;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['mailbox_roles']['Row'], 'mailbox_id'>
+        >;
+        Relationships: [];
+      };
+
+      /** Service-role only: RLS is enabled with no policies. */
+      mailbox_secrets: {
+        Row: {
+          mailbox_id: string;
+          password: string;
+          updated_at: string;
+        };
+        Insert: {
+          mailbox_id: string;
+          password: string;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['mailbox_secrets']['Row'], 'mailbox_id'>
+        >;
+        Relationships: [];
+      };
+
       client_social_handles: {
         Row: {
           id: string;
           client_id: string;
           platform: 'instagram' | 'facebook' | 'tiktok' | 'pinterest';
           handle: string;
+          external_user_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -417,6 +485,7 @@ export interface Database {
           client_id: string;
           platform: Database['public']['Tables']['client_social_handles']['Row']['platform'];
           handle: string;
+          external_user_id?: string | null;
         };
         Update: Partial<
           Omit<

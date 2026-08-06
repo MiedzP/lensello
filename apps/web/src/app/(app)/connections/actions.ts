@@ -15,9 +15,15 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { SOCIAL_PLATFORMS } from '@lensello/core';
-import { IntegrationError, getIntegrations } from '@lensello/core/integrations';
+import {
+  IntegrationError,
+  createMailboxClient,
+  getIntegrations,
+  guessHosts,
+} from '@lensello/core/integrations';
 import { requireUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { encryptSecret, isEncryptionConfigured } from '@/lib/crypto/secret-box';
 import { failed, ok, type ActionState } from '@/lib/connections/action-state';
 import {
   OAUTH_STATE_COOKIE,
@@ -34,6 +40,30 @@ import { syncSocialMessages } from '@/lib/connections/sync';
 
 const platformSchema = z.object({
   platform: z.enum(SOCIAL_PLATFORMS),
+});
+
+const port = z
+  .string()
+  .trim()
+  .optional()
+  .transform((value) => (value ? Number(value) : undefined))
+  .refine(
+    (value) => value === undefined || (Number.isInteger(value) && value > 0 && value < 65536),
+    'Ports must be between 1 and 65535.',
+  );
+
+const mailboxSchema = z.object({
+  emailAddress: z.string().trim().email('Enter a valid email address.'),
+  displayName: z.string().trim().max(120).optional(),
+  // Gmail shows app passwords with spaces in them; people paste what they see.
+  password: z
+    .string()
+    .min(1, 'Enter the app password.')
+    .transform((value) => value.replace(/\s+/g, '')),
+  imapHost: z.string().trim().optional(),
+  smtpHost: z.string().trim().optional(),
+  imapPort: port,
+  smtpPort: port,
 });
 
 function describe(cause: unknown, fallback: string): string {
@@ -137,6 +167,136 @@ export async function disconnect(
 
   revalidatePath('/connections');
   return ok(`Unlinked @${account.handle}.`);
+}
+
+/**
+ * Connects the studio mailbox.
+ *
+ * The credentials are proven before anything is written: a stored mailbox that
+ * has never been tested is a mailbox that fails the first time somebody tries
+ * to answer a client, which is the worst possible moment to find out.
+ */
+export async function connectMailbox(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { user, supabase } = await requireUser();
+
+  if (!isEncryptionConfigured()) {
+    return failed(
+      'LENSELLO_ENCRYPTION_KEY is not set, so the password cannot be stored ' +
+        'safely. Generate one with: openssl rand -base64 32',
+    );
+  }
+
+  const parsed = mailboxSchema.safeParse({
+    emailAddress: formData.get('emailAddress'),
+    displayName: formData.get('displayName') ?? undefined,
+    password: formData.get('password'),
+    imapHost: formData.get('imapHost') ?? undefined,
+    smtpHost: formData.get('smtpHost') ?? undefined,
+    imapPort: formData.get('imapPort') ?? undefined,
+    smtpPort: formData.get('smtpPort') ?? undefined,
+  });
+
+  if (!parsed.success) {
+    return failed(parsed.error.issues[0]?.message ?? 'Check those details.');
+  }
+
+  const input = parsed.data;
+  const emailAddress = input.emailAddress.toLowerCase();
+  const guessed = guessHosts(emailAddress);
+
+  const imapHost = input.imapHost || guessed?.imapHost;
+  const smtpHost = input.smtpHost || guessed?.smtpHost;
+
+  if (!imapHost || !smtpHost) {
+    return failed(
+      `We do not know the mail servers for ${emailAddress.split('@')[1]}. ` +
+        'Enter the IMAP and SMTP hostnames — your provider publishes them.',
+    );
+  }
+
+  const config = {
+    emailAddress,
+    displayName: input.displayName || '',
+    password: input.password,
+    imapHost,
+    imapPort: input.imapPort ?? guessed?.imapPort ?? 993,
+    smtpHost,
+    smtpPort: input.smtpPort ?? guessed?.smtpPort ?? 465,
+  };
+
+  // Proves both reading and sending before a single row is written.
+  try {
+    await createMailboxClient(config).testConnection();
+  } catch (cause) {
+    return failed(describe(cause, 'Could not connect to that mailbox.'));
+  }
+
+  const { data: mailbox, error: mailboxError } = await supabase
+    .from('mailboxes')
+    .upsert(
+      {
+        email_address: config.emailAddress,
+        display_name: config.displayName,
+        imap_host: config.imapHost,
+        imap_port: config.imapPort,
+        smtp_host: config.smtpHost,
+        smtp_port: config.smtpPort,
+        status: 'connected',
+        last_error: null,
+        connected_by: user.id,
+      },
+      { onConflict: 'email_address' },
+    )
+    .select('id')
+    .single();
+
+  if (mailboxError || !mailbox) {
+    return failed(`Could not save the mailbox: ${mailboxError?.message ?? 'unknown error.'}`);
+  }
+
+  const admin = createAdminClient();
+  const { error: secretError } = await admin.from('mailbox_secrets').upsert(
+    { mailbox_id: mailbox.id, password: encryptSecret(config.password) },
+    { onConflict: 'mailbox_id' },
+  );
+
+  if (secretError) {
+    // A mailbox row with no password would look connected and fail on use.
+    await supabase.from('mailboxes').delete().eq('id', mailbox.id);
+    return failed(`Could not store the password: ${secretError.message}`);
+  }
+
+  // Exactly one primary is a database guarantee, so the old one is stood down
+  // before this one is promoted rather than relying on the insert to win.
+  await supabase.from('mailbox_roles').delete().neq('mailbox_id', mailbox.id);
+  await supabase
+    .from('mailbox_roles')
+    .upsert({ mailbox_id: mailbox.id, is_primary: true }, { onConflict: 'mailbox_id' });
+
+  revalidatePath('/connections');
+  revalidatePath('/clients');
+  return ok(`${config.emailAddress} is connected. Replies will send from it.`);
+}
+
+export async function disconnectMailbox(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const mailboxId = formData.get('mailboxId');
+  if (typeof mailboxId !== 'string' || !mailboxId) return failed('Unknown mailbox.');
+
+  // Cascades to mailbox_roles and mailbox_secrets, so the password does not
+  // outlive the connection.
+  const { error } = await supabase.from('mailboxes').delete().eq('id', mailboxId);
+  if (error) return failed(`Could not disconnect the mailbox: ${error.message}`);
+
+  revalidatePath('/connections');
+  return ok('Mailbox disconnected.');
 }
 
 /**

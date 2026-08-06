@@ -10,9 +10,60 @@ Instagram when it isn't.
 
 ---
 
-## Part 1 — Email (do this first)
+## Part 1 — Connect your own mailbox (do this first)
 
-No approval, no review. Roughly 30 minutes, most of it waiting for DNS.
+This is the recommended route. Lensello signs in to the studio's existing email
+account over IMAP and SMTP, so replies leave **from your real address**, thread
+properly in the client's mail app, and their answer comes back to the inbox you
+already watch. Five minutes, no approval, no DNS.
+
+### 1. Turn on two-factor authentication
+
+Your provider will not issue an app password without it.
+
+### 2. Generate an app password
+
+Not your normal password — a separate one, scoped to a single app.
+
+| Provider | Where |
+| --- | --- |
+| Gmail | <https://myaccount.google.com/apppasswords> |
+| Outlook / Hotmail | <https://account.microsoft.com/security> → Advanced security |
+| iCloud | <https://account.apple.com> → Sign-In and Security → App-Specific Passwords |
+| Yahoo | <https://login.yahoo.com/account/security> |
+
+Copy it. Gmail shows it with spaces; paste it as-is, Lensello strips them.
+
+### 3. Connect it
+
+Open **Connections** → **Studio mailbox**. Enter the address, a display name,
+and the app password. For Gmail, Outlook, iCloud, Yahoo, Zoho, and Fastmail the
+server settings fill themselves in; anything else, open **Server settings** and
+enter the IMAP and SMTP hosts your provider publishes.
+
+Connecting tests both directions before saving anything, so if it succeeds,
+sending and reading both work.
+
+### What Lensello can do with it
+
+The app password grants access to that whole mailbox — it is broader than an
+OAuth scope would be. It is stored encrypted with AES-256-GCM in a table with
+row-level security enabled and **no policies at all**, so no user session can
+read it; the decryption key is a separate secret held in the environment, so a
+leaked database key alone is not enough to use it. Disconnecting deletes it.
+
+If that trade-off is not one you want, revoke the app password at your provider
+at any time — it takes effect immediately and affects nothing else on the
+account.
+
+---
+
+## Alternative — Postmark
+
+Only worth it if you would rather Lensello never hold a mailbox credential, or
+you want a dedicated sending address separate from your own. Replies then come
+from that address instead of yours and start a new thread rather than
+continuing the client's.
 
 ### 1. Create a Postmark account
 
