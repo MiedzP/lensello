@@ -28,6 +28,8 @@ const PUBLIC_PATHS = [
   // Contract acceptance. Same reasoning as galleries: the client signing is
   // not a user of the studio's workspace and must not be given a session.
   '/c',
+  // Where Stripe returns a client after checkout. They have no account.
+  '/paid',
   // Cron endpoints have no session to refresh and would be bounced to /login.
   // They are not unprotected: each one checks CRON_SECRET itself and refuses
   // to run when it is unset.

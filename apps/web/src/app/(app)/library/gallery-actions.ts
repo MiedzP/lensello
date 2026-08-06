@@ -47,7 +47,6 @@ const createSchema = z.object({
     ),
   allowDownloads: z.string().optional(),
   watermark: z.string().optional(),
-  downloadQuality: z.enum(['web', 'full']).optional(),
 });
 
 export async function createGallery(
@@ -64,7 +63,6 @@ export async function createGallery(
     expiresInDays: formData.get('expiresInDays') ?? undefined,
     allowDownloads: formData.get('allowDownloads') ?? undefined,
     watermark: formData.get('watermark') ?? undefined,
-    downloadQuality: formData.get('downloadQuality') || undefined,
   });
 
   if (!parsed.success) {
@@ -93,7 +91,9 @@ export async function createGallery(
     password_hash: passwordHash,
     expires_at: expiresAt,
     allow_downloads: input.allowDownloads === 'on',
-    download_quality: input.downloadQuality ?? 'web',
+    // Always 'full': downloads serve the original file. See the note in
+    // gallery-panel.tsx — the column stays for when resizing is available.
+    download_quality: 'full',
     watermark: input.watermark === 'on',
     created_by: user.id,
   });

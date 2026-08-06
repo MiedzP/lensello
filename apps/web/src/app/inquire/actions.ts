@@ -17,6 +17,7 @@
 import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { SHOOT_TYPE_LABELS } from '@lensello/core';
+import { integrationStatus } from '@lensello/core/integrations';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveMailClient } from '@/lib/mailboxes/queries';
 import { notifyInbound } from '@/lib/notifications/notify';
@@ -31,6 +32,8 @@ import { InquiryThrottled, submitInquiry } from '@/lib/inquiries/submit';
 export interface InquiryState {
   sent: boolean;
   error: string | null;
+  /** False when no confirmation actually went out, so the copy can be honest. */
+  emailed: boolean;
   /** Shown after a successful submit, when a date was given. */
   availability: 'open' | 'taken' | null;
 }
@@ -38,6 +41,7 @@ export interface InquiryState {
 export const INQUIRY_IDLE: InquiryState = {
   sent: false,
   error: null,
+  emailed: false,
   availability: null,
 };
 
@@ -103,13 +107,13 @@ export async function submitInquiryAction(
   });
 
   if (!parsed.success) {
-    return { sent: false, error: firstIssue(parsed.error), availability: null };
+    return { sent: false, error: firstIssue(parsed.error), emailed: false, availability: null };
   }
 
   // Honeypot tripped. Reported as success and thrown away: telling a bot it
   // was caught only teaches it which field to leave alone next time.
   if (parsed.data.website) {
-    return { sent: true, error: null, availability: null };
+    return { sent: true, error: null, emailed: false, availability: null };
   }
 
   const input = parsed.data;
@@ -120,26 +124,34 @@ export async function submitInquiryAction(
     outcome = await submitInquiry(admin, input, await callerIp());
   } catch (cause) {
     if (cause instanceof InquiryThrottled) {
-      return { sent: false, error: cause.message, availability: null };
+      return { sent: false, error: cause.message, emailed: false, availability: null };
     }
     console.error('[inquiry] could not record', cause);
     return {
       sent: false,
       error: 'Something went wrong sending that. Please try again in a moment.',
+      emailed: false,
       availability: null,
     };
   }
 
   // --- best effort from here; the inquiry is already safe ---
 
+  // Tracked rather than assumed. With no mailbox connected and no Postmark,
+  // the registry hands back the MOCK, which "succeeds" and sends nothing — so
+  // telling the client "we've sent a confirmation" would be a plain lie on the
+  // first screen a prospective customer ever sees.
+  let emailed = false;
   try {
-    const { mail } = await resolveMailClient(admin, admin);
+    const { mail, mailbox } = await resolveMailClient(admin, admin);
+    const live = mailbox !== null || integrationStatus().mail === 'live';
     await mail.send({
       toEmail: input.email,
       toName: input.name,
       subject: `We got your ${SHOOT_TYPE_LABELS[input.shootType].toLowerCase()} enquiry`,
       body: confirmationBody(input, outcome.dateAvailable),
     });
+    emailed = live;
   } catch (cause) {
     console.error('[inquiry] confirmation email failed', cause);
   }
@@ -168,6 +180,7 @@ export async function submitInquiryAction(
   return {
     sent: true,
     error: null,
+    emailed,
     availability:
       outcome.dateAvailable === null ? null : outcome.dateAvailable ? 'open' : 'taken',
   };

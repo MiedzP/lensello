@@ -33,7 +33,7 @@ export function GalleryGrid({
   allowDownloads: boolean;
   watermark: boolean;
 }) {
-  const [, favouriteAction] = useActionState(toggleFavourite, GALLERY_IDLE);
+  const [favouriteState, favouriteAction] = useActionState(toggleFavourite, GALLERY_IDLE);
   const [, startTransition] = useTransition();
 
   const [optimistic, setOptimistic] = useOptimistic(
@@ -48,6 +48,15 @@ export function GalleryGrid({
 
   return (
     <>
+      {/* Without this the optimistic heart simply flips back when the server
+          refuses — a client whose selection is locked would tap repeatedly and
+          be told nothing. */}
+      {favouriteState.error ? (
+        <div className="mb-4">
+          <ErrorNote>{favouriteState.error}</ErrorNote>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
         {optimistic.map((photo) => (
           <figure key={photo.id} className="group relative">
@@ -100,9 +109,12 @@ export function GalleryGrid({
             )}
 
             {allowDownloads ? (
+              /* Routed through our own origin rather than linking the signed
+                 Supabase URL directly: the `download` attribute is ignored
+                 cross-origin, so that version opened the photograph in a tab
+                 instead of saving it. */
               <a
-                href={photo.url}
-                download={photo.filename}
+                href={`/g/${token}/download/${photo.id}`}
                 className="absolute bottom-2 left-2 rounded-md bg-black/45 px-2 py-1 text-xs text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
               >
                 Download

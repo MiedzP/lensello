@@ -11,7 +11,6 @@ import {
   ErrorNote,
   Field,
   Input,
-  Select,
   Textarea,
 } from '@/components/ui';
 import {
@@ -150,12 +149,11 @@ export function GalleryPanel({
                 <Input id="gallery-expiry" name="expiresInDays" inputMode="numeric" placeholder="90" />
               </Field>
 
-              <Field label="Download quality" htmlFor="gallery-quality">
-                <Select id="gallery-quality" name="downloadQuality" defaultValue="web">
-                  <option value="web">Web size</option>
-                  <option value="full">Full resolution</option>
-                </Select>
-              </Field>
+              {/* No download-quality control. It existed, was stored, and was
+                  never honoured — every download served the original either
+                  way. Resizing needs Supabase image transformation, which is a
+                  paid feature and not enabled, so offering the choice was a
+                  promise the app could not keep. */}
             </div>
 
             <div className="flex flex-wrap gap-4">

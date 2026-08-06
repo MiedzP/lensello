@@ -36,8 +36,9 @@ export function InquiryForm() {
           Thanks — that&rsquo;s come through.
         </p>
         <p className="mt-1 text-sm text-muted">
-          We&rsquo;ve sent a confirmation to your inbox and will come back to you
-          personally.
+          {state.emailed
+            ? "We've sent a confirmation to your inbox and will come back to you personally."
+            : "We'll come back to you personally."}
         </p>
 
         {state.availability === 'open' ? (

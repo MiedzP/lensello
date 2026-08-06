@@ -16,6 +16,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { hashToken, hashVisitor } from '@/lib/crypto/share-token';
+import { notifyStudio } from '@/lib/notifications/notify';
 
 export interface ContractState {
   error: string | null;
@@ -52,7 +53,7 @@ export async function acceptContract(
 
   const { data: contract } = await admin
     .from('contracts')
-    .select('id, status, expires_at')
+    .select('id, status, expires_at, title, gig_id')
     .eq('token_hash', hashToken(parsed.data.token))
     .maybeSingle();
 
@@ -105,8 +106,20 @@ export async function acceptContract(
     return { error: `That could not be recorded: ${error.message}`, accepted: false };
   }
 
-  // Lost the race — the other request accepted it. Still a success.
+  // Lost the race — the other request accepted it. Still a success, and the
+  // winner already sent the alert.
   if (!updated) return { error: null, accepted: true };
+
+  // A signed contract nobody is told about is a signed contract nobody acts on.
+  await notifyStudio(
+    `Agreement signed by ${parsed.data.name}`,
+    [
+      `${parsed.data.name} has accepted "${contract.title}".`,
+      '',
+      `Gig: ${contract.gig_id}`,
+      `Signed: ${new Date().toLocaleString('en-GB')}`,
+    ].join('\n'),
+  );
 
   revalidatePath(`/c/${parsed.data.token}`);
   return { error: null, accepted: true };

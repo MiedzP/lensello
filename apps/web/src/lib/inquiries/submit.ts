@@ -133,16 +133,34 @@ export async function submitInquiry(
       source: 'website',
     };
 
+    // ignoreDuplicates, NOT a plain upsert. A plain upsert UPDATES on conflict,
+    // which would overwrite the name, phone, source and — worst — reset `stage`
+    // to 'lead'. A client already marked 'booked' who fills the form in again
+    // for a second shoot would be silently demoted, and the select above cannot
+    // prevent it: a concurrent request can insert the row in between.
     const { data: created, error } = await admin
       .from('clients')
-      .upsert(row, { onConflict: 'email' })
-      .select('id')
-      .single();
+      .upsert(row, { onConflict: 'email', ignoreDuplicates: true })
+      .select('id');
 
-    if (error || !created) {
-      throw new Error(`Could not record the inquiry: ${error?.message ?? 'unknown error.'}`);
+    if (error) {
+      throw new Error(`Could not record the inquiry: ${error.message}`);
     }
-    clientId = created.id;
+
+    if (created?.[0]) {
+      clientId = created[0].id;
+    } else {
+      // Lost the race: the row exists now, so read the winner rather than
+      // failing an enquiry we could still file.
+      const { data: raced } = await admin
+        .from('clients')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (!raced) throw new Error('Could not record the inquiry: the client record vanished.');
+      clientId = raced.id;
+    }
   }
   // An existing client's stage is deliberately left alone. Somebody already
   // marked 'booked' who asks about a second shoot is not demoted to a lead.

@@ -89,6 +89,44 @@ function buildBody(alerts: InboundAlert[], appUrl: string): string {
 }
 
 /**
+ * Sends one alert to the studio.
+ *
+ * The shared path for anything a client did that somebody needs to know about:
+ * an enquiry arriving, a gallery approved, a contract signed. Never throws —
+ * the thing being reported has already happened, and failing the client's
+ * action because an alert did not send would be strictly worse.
+ */
+export async function notifyStudio(
+  subject: string,
+  body: string,
+): Promise<boolean> {
+  try {
+    const recipients = await resolveRecipients();
+    if (recipients.length === 0) {
+      console.warn('[notify] nothing sent: no recipient configured');
+      return false;
+    }
+
+    const { mail } = getIntegrations();
+    let sent = false;
+
+    for (const toEmail of recipients) {
+      try {
+        await mail.send({ toEmail, toName: null, subject, body });
+        sent = true;
+      } catch (cause) {
+        console.error(`[notify] could not alert ${toEmail}`, cause);
+      }
+    }
+
+    return sent;
+  } catch (cause) {
+    console.error('[notify] alert failed', cause);
+    return false;
+  }
+}
+
+/**
  * Sends one alert covering everything that just arrived.
  *
  * One email for a batch rather than one per message: a forwarded backlog would

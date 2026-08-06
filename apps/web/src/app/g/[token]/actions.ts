@@ -14,13 +14,14 @@
  * immediately — not at their next refresh.
  */
 
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { notifyStudio } from '@/lib/notifications/notify';
 import { resolveGallery, type ResolvedGallery } from '@/lib/galleries/queries';
 import type { createAdminClient as createAdmin } from '@/lib/supabase/admin';
-import { hashVisitor, verifyPassword } from '@/lib/galleries/tokens';
+import { verifyPassword } from '@/lib/galleries/tokens';
 import {
   UNLOCK_TTL_SECONDS,
   signUnlock,
@@ -225,21 +226,19 @@ export async function approveSelection(
     return { error: `That could not be saved: ${error.message}`, message: null };
   }
 
+  // The studio is told, or "sent to the studio" is a phrase with nothing
+  // behind it — nobody would know a selection was ready.
+  await notifyStudio(
+    `Gallery approved: ${resolved.gallery.title || resolved.shoot.title}`,
+    [
+      `${typeof name === 'string' && name.trim() ? name.trim() : 'The client'} has approved their selection.`,
+      '',
+      `Shoot: ${resolved.shoot.title}`,
+      `Photographs chosen: ${count ?? 0}`,
+      ...(typeof note === 'string' && note.trim() ? ['', `They added: ${note.trim()}`] : []),
+    ].join('\n'),
+  );
+
   revalidatePath(`/g/${formData.get('token')}`);
   return { error: null, message: 'Thank you — your selection has been sent to the studio.' };
-}
-
-/** Records a download for the studio's activity view. Best effort. */
-export async function noteDownload(token: string): Promise<void> {
-  const auth = await authorize(token);
-  if (!auth.ok) return;
-
-  const headerList = await headers();
-  const ip = headerList.get('x-forwarded-for')?.split(',')[0]?.trim();
-
-  await auth.admin.from('gallery_views').insert({
-    gallery_id: auth.resolved.gallery.id,
-    ip_hash: ip ? hashVisitor(ip) : null,
-    downloaded: true,
-  });
 }
