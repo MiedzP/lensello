@@ -178,6 +178,23 @@ export async function syncInboundMail(supabase: Supabase): Promise<SyncResult> {
   // has to stay a one-file change.
   const fetched = await mail.fetchInbox(since);
 
+  return fileInboundMessages(supabase, fetched);
+}
+
+/**
+ * Files already-fetched messages.
+ *
+ * Split from `syncInboundMail` so the inbound webhook can reuse it verbatim.
+ * Mail now arrives two ways — pushed by the provider within seconds, and
+ * pulled by the sync button — and both must land through this one function.
+ * Two write paths would mean two chances to disagree about what counts as a
+ * duplicate, and the whole idempotency argument above rests on there being
+ * exactly one.
+ */
+export async function fileInboundMessages(
+  supabase: Supabase,
+  fetched: InboundMessage[],
+): Promise<SyncResult> {
   let skipped = 0;
 
   // Deduplicate within the payload as well as against the table: a provider can

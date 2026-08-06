@@ -22,6 +22,9 @@ const PUBLIC_PATHS = [
   // They are not unprotected: each one checks CRON_SECRET itself and refuses
   // to run when it is unset.
   '/api/cron',
+  // Same for provider webhooks, which authenticate with their own shared
+  // secret and likewise fail closed when it is missing.
+  '/api/webhooks',
 ];
 
 /** Signed-in visitors have no use for these and are sent to the dashboard. */
