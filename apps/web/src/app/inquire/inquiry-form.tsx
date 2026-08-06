@@ -14,6 +14,7 @@ import {
 import {
   BUDGET_BANDS,
   BUDGET_LABELS,
+  MARKETING_CONSENT_WORDING,
   MAX_MESSAGE_LENGTH,
 } from '@/lib/inquiries/schema';
 import { INQUIRY_IDLE, submitInquiryAction } from './actions';
@@ -130,6 +131,17 @@ export function InquiryForm() {
         />
       </Field>
 
+      {/* Unticked by default and never required. A pre-ticked box, or one you
+          must accept to send the form, is not freely given consent. */}
+      <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-subtle bg-surface px-3 py-2.5">
+        <input
+          type="checkbox"
+          name="marketingConsent"
+          className="mt-0.5 size-4 shrink-0 accent-accent"
+        />
+        <span className="text-sm text-muted">{MARKETING_CONSENT_WORDING}</span>
+      </label>
+
       <Button
         type="submit"
         variant="primary"
@@ -141,7 +153,8 @@ export function InquiryForm() {
       </Button>
 
       <p className="text-center text-xs text-faint">
-        We&rsquo;ll only use your details to reply to this enquiry.
+        We use your details to reply to this enquiry. That does not require the
+        box above — leave it unticked and we&rsquo;ll still get back to you.
       </p>
     </form>
   );

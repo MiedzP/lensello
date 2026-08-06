@@ -23,6 +23,7 @@
  */
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import {
   IntegrationError,
   getIntegrations,
@@ -30,6 +31,8 @@ import {
 } from '@lensello/core/integrations';
 import type { ClientStage, SocialPlatform } from '@lensello/core';
 import { requireUser, type Session } from '@/lib/auth';
+import { eraseSubject } from '@/lib/privacy/subject';
+import { recordAudit } from '@/lib/privacy/audit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveMailClient } from '@/lib/mailboxes/queries';
 import {
@@ -569,5 +572,132 @@ export async function sendReplyAction(
     suggestedStage: suggestNextStage(client.stage),
     token,
     sentCount: previous.sentCount + 1,
+  };
+}
+
+// --- privacy -------------------------------------------------------------
+
+export interface EraseState {
+  error: string | null;
+  message: string | null;
+}
+
+export const ERASE_IDLE: EraseState = { error: null, message: null };
+
+/**
+ * Erases a client on request.
+ *
+ * Owner-only and typed-confirmation-gated, because it is irreversible and a
+ * misclick costs a client's entire correspondence history. The confirmation is
+ * the client's own name rather than a generic "DELETE": it forces the operator
+ * to look at which record they are on.
+ */
+export async function eraseClientAction(
+  _previous: EraseState,
+  formData: FormData,
+): Promise<EraseState> {
+  const { supabase, user, profile } = await requireUser();
+
+  if (profile.role !== 'owner') {
+    return { error: 'Only an owner can erase a client record.', message: null };
+  }
+
+  const clientId = formData.get('clientId');
+  const confirmation = formData.get('confirmation');
+
+  if (typeof clientId !== 'string' || !clientId) {
+    return { error: 'Unknown client.', message: null };
+  }
+
+  const { data: client } = await supabase
+    .from('clients')
+    .select('id, name')
+    .eq('id', clientId)
+    .maybeSingle();
+
+  if (!client) return { error: 'That client no longer exists.', message: null };
+
+  if (typeof confirmation !== 'string' || confirmation.trim() !== client.name) {
+    return {
+      error: `Type the client's name exactly (${client.name}) to confirm.`,
+      message: null,
+    };
+  }
+
+  let result;
+  try {
+    result = await eraseSubject(supabase, clientId);
+  } catch (cause) {
+    return {
+      error: cause instanceof Error ? cause.message : 'The record could not be erased.',
+      message: null,
+    };
+  }
+
+  // Recorded after the fact and without the erased data itself — enough to
+  // prove the request was honoured, not enough to undo it.
+  await recordAudit(
+    supabase,
+    { id: user.id, email: user.email },
+    {
+      action: 'client.erased',
+      subjectType: 'client',
+      subjectId: clientId,
+      detail: {
+        messagesDeleted: result.messagesDeleted,
+        gigsRetained: result.gigsRetained,
+        shootsRetained: result.shootsRetained,
+      },
+    },
+  );
+
+  revalidatePath('/clients');
+  redirect('/clients');
+}
+
+/** Records a consent decision made by staff on the client's behalf. */
+export async function setMarketingConsentAction(
+  _previous: EraseState,
+  formData: FormData,
+): Promise<EraseState> {
+  const { supabase, user } = await requireUser();
+
+  const clientId = formData.get('clientId');
+  const granted = formData.get('granted') === 'true';
+
+  if (typeof clientId !== 'string' || !clientId) {
+    return { error: 'Unknown client.', message: null };
+  }
+
+  const { error } = await supabase.from('client_consents').insert({
+    client_id: clientId,
+    purpose: 'marketing',
+    granted,
+    source: 'staff',
+    evidence: granted
+      ? 'Recorded by staff: client confirmed they are happy to receive marketing.'
+      : 'Recorded by staff: client asked not to receive marketing.',
+    recorded_by: user.id,
+  });
+
+  if (error) {
+    return { error: `Could not record that: ${error.message}`, message: null };
+  }
+
+  await recordAudit(
+    supabase,
+    { id: user.id, email: user.email },
+    {
+      action: 'client.consent_recorded',
+      subjectType: 'client',
+      subjectId: clientId,
+      detail: { purpose: 'marketing', granted },
+    },
+  );
+
+  revalidateClient(clientId);
+  return {
+    error: null,
+    message: granted ? 'Marketing consent recorded.' : 'Marketing consent withdrawn.',
   };
 }

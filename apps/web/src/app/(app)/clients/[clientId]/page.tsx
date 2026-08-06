@@ -12,6 +12,7 @@ import { formatDateOnly, shortDate } from '@/lib/clients/format';
 import { findRequestedDate } from '@/lib/clients/requested-date';
 import { CLIENT_SOURCE_LABELS, CLIENT_STAGE_TONES } from '@/lib/clients/stages';
 import { ClientRecordForm } from '../components/client-record-form';
+import { PrivacyPanel } from '../components/privacy-panel';
 import { MessageThread } from '../components/message-thread';
 import { ReplyComposer } from '../components/reply-composer';
 
@@ -20,7 +21,7 @@ export const metadata: Metadata = { title: 'Client' };
 export default async function ClientDetailPage(
   props: PageProps<'/clients/[clientId]'>,
 ) {
-  const { supabase } = await requireUserOrRedirect();
+  const { supabase, profile } = await requireUserOrRedirect();
   // Async in Next 16 — params is a Promise.
   const { clientId } = await props.params;
 
@@ -139,8 +140,15 @@ export default async function ClientDetailPage(
           />
         </div>
 
-        <div className="lg:sticky lg:top-8 lg:self-start">
+        <div className="space-y-6 lg:sticky lg:top-8 lg:self-start">
           <ClientRecordForm client={client} />
+
+          <PrivacyPanel
+            clientId={client.id}
+            clientName={client.name}
+            marketingConsent={client.marketing_consent}
+            isOwner={profile.role === 'owner'}
+          />
         </div>
       </div>
     </>

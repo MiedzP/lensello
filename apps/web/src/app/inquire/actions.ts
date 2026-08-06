@@ -98,6 +98,7 @@ export async function submitInquiryAction(
     headcount: formData.get('headcount') ?? undefined,
     budget: formData.get('budget') || undefined,
     message: formData.get('message') ?? '',
+    marketingConsent: formData.get('marketingConsent') ?? '',
     website: formData.get('website') ?? '',
   });
 

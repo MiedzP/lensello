@@ -54,6 +54,8 @@ export interface Database {
             | 'other';
           notes: string | null;
           last_contacted_at: string | null;
+          /** Maintained by a trigger on client_consents; do not write directly. */
+          marketing_consent: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -334,6 +336,57 @@ export interface Database {
         Update: Partial<
           Omit<Database['public']['Tables']['messages']['Row'], 'id' | 'created_at'>
         >;
+        Relationships: [];
+      };
+
+      client_consents: {
+        Row: {
+          id: string;
+          client_id: string;
+          purpose: 'marketing';
+          granted: boolean;
+          source: 'inquiry_form' | 'staff' | 'unsubscribe' | 'import';
+          evidence: string | null;
+          ip_hash: string | null;
+          recorded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          client_id: string;
+          purpose: 'marketing';
+          granted: boolean;
+          source: Database['public']['Tables']['client_consents']['Row']['source'];
+          evidence?: string | null;
+          ip_hash?: string | null;
+          recorded_by?: string | null;
+        };
+        Update: never;
+        Relationships: [];
+      };
+
+      /** Append-only: no update or delete policy exists. */
+      audit_events: {
+        Row: {
+          id: string;
+          actor_id: string | null;
+          actor_email: string | null;
+          action: string;
+          subject_type: string;
+          subject_id: string | null;
+          detail: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_id?: string | null;
+          actor_email?: string | null;
+          action: string;
+          subject_type: string;
+          subject_id?: string | null;
+          detail?: Json;
+        };
+        Update: never;
         Relationships: [];
       };
 

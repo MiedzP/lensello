@@ -12,6 +12,17 @@ import { SHOOT_TYPES } from '@lensello/core';
 
 export const MAX_MESSAGE_LENGTH = 2000;
 
+/**
+ * The exact marketing consent wording.
+ *
+ * Exported so the form renders it and the submit handler stores it verbatim as
+ * evidence. "They ticked a box" is not a defence if nobody can say what the box
+ * said, and a constant is the only way to guarantee the two never drift apart.
+ */
+export const MARKETING_CONSENT_WORDING =
+  'Yes — you can email me occasional availability, offers and new work. ' +
+  'I can unsubscribe at any time.';
+
 /** Bands rather than a number: people know their range, not their figure. */
 export const BUDGET_BANDS = [
   'under_1000',
@@ -64,6 +75,18 @@ export const inquirySchema = z.object({
     .trim()
     .min(1, 'Tell us a little about the shoot.')
     .max(MAX_MESSAGE_LENGTH, `Please keep it under ${MAX_MESSAGE_LENGTH} characters.`),
+
+  /**
+   * Marketing consent, separate from the enquiry itself.
+   *
+   * Replying to an enquiry needs no consent — that is the whole point of
+   * sending it. Marketing does, and bundling the two would make the consent
+   * neither freely given nor specific, which is to say not consent.
+   */
+  marketingConsent: z
+    .union([z.literal('on'), z.literal('')])
+    .optional()
+    .transform((value) => value === 'on'),
 
   /**
    * Honeypot. Hidden from humans by CSS and left blank by them; bots fill

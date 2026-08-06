@@ -17,7 +17,11 @@ import { SHOOT_TYPE_LABELS } from '@lensello/core';
 import { findConflictingGigs } from '@/lib/gigs/queries';
 import type { TablesInsert } from '@/lib/db.types';
 import type { createAdminClient } from '@/lib/supabase/admin';
-import { BUDGET_LABELS, type InquiryInput } from './schema';
+import {
+  BUDGET_LABELS,
+  MARKETING_CONSENT_WORDING,
+  type InquiryInput,
+} from './schema';
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -159,6 +163,20 @@ export async function submitInquiry(
   const { error: messageError } = await admin.from('messages').insert(message);
   if (messageError) {
     throw new Error(`Could not record the inquiry: ${messageError.message}`);
+  }
+
+  // Only recorded when granted. An unticked box is the absence of consent,
+  // not a withdrawal of it, and writing `granted: false` here would overwrite a
+  // consent this person gave on an earlier enquiry.
+  if (input.marketingConsent) {
+    await admin.from('client_consents').insert({
+      client_id: clientId,
+      purpose: 'marketing',
+      granted: true,
+      source: 'inquiry_form',
+      evidence: MARKETING_CONSENT_WORDING,
+      ip_hash: hashIp(ip),
+    });
   }
 
   let dateAvailable: boolean | null = null;
