@@ -29,7 +29,7 @@ import {
   getIntegrations,
   type PublishResult,
 } from '@lensello/core/integrations';
-import type { ClientStage, SocialPlatform } from '@lensello/core';
+import type { SocialPlatform } from '@lensello/core';
 import { requireUser, type Session } from '@/lib/auth';
 import { eraseSubject } from '@/lib/privacy/subject';
 import { recordAudit } from '@/lib/privacy/audit';
@@ -52,6 +52,7 @@ import {
 } from '@/lib/clients/schemas';
 import { suggestNextStage } from '@/lib/clients/stages';
 import { syncInboundMail } from '@/lib/clients/sync';
+import type { SyncState, RecordState, StageState, HandledState, SendState, EraseState } from './form-state';
 
 /** Postgres unique-violation. Surfaced as a field error, not a stack trace. */
 const UNIQUE_VIOLATION = '23505';
@@ -62,15 +63,6 @@ function revalidateClient(clientId: string): void {
 }
 
 // --- inbox sync ---------------------------------------------------------
-
-export interface SyncState {
-  summary: string | null;
-  error: string | null;
-  /** Changes on every run so the UI can react even to an identical result. */
-  token: number;
-}
-
-export const INITIAL_SYNC: SyncState = { summary: null, error: null, token: 0 };
 
 export async function syncInboxAction(previous: SyncState): Promise<SyncState> {
   const { supabase } = await requireUser();
@@ -120,14 +112,6 @@ export async function syncInboxAction(previous: SyncState): Promise<SyncState> {
 }
 
 // --- the client record --------------------------------------------------
-
-export interface RecordState {
-  saved: boolean;
-  error: string | null;
-  token: number;
-}
-
-export const INITIAL_RECORD: RecordState = { saved: false, error: null, token: 0 };
 
 export async function updateClientAction(
   previous: RecordState,
@@ -181,13 +165,6 @@ export async function updateClientAction(
   return { saved: true, error: null, token };
 }
 
-export interface StageState {
-  error: string | null;
-  token: number;
-}
-
-export const INITIAL_STAGE: StageState = { error: null, token: 0 };
-
 export async function setClientStageAction(
   previous: StageState,
   formData: FormData,
@@ -214,13 +191,6 @@ export async function setClientStageAction(
 }
 
 // --- triage -------------------------------------------------------------
-
-export interface HandledState {
-  error: string | null;
-  token: number;
-}
-
-export const INITIAL_HANDLED: HandledState = { error: null, token: 0 };
 
 export async function setMessageHandledAction(
   previous: HandledState,
@@ -298,31 +268,6 @@ export async function draftReplyAction(formData: FormData): Promise<DraftResult>
 }
 
 // --- sending ------------------------------------------------------------
-
-export interface SendState {
-  sent: boolean;
-  error: string | null;
-  /** Offered, not applied, once a reply has gone out. */
-  suggestedStage: ClientStage | null;
-  token: number;
-  /**
-   * Successful sends only.
-   *
-   * The composer uses this as a React `key`, which is what clears it after a
-   * send: the subtree remounts and its state resets. `token` would be wrong for
-   * that — it changes on failures too, and a failed send must not throw away
-   * what the photographer typed.
-   */
-  sentCount: number;
-}
-
-export const INITIAL_SEND: SendState = {
-  sent: false,
-  error: null,
-  suggestedStage: null,
-  token: 0,
-  sentCount: 0,
-};
 
 type MessageChannel = Tables<'messages'>['channel'];
 
@@ -576,13 +521,6 @@ export async function sendReplyAction(
 }
 
 // --- privacy -------------------------------------------------------------
-
-export interface EraseState {
-  error: string | null;
-  message: string | null;
-}
-
-export const ERASE_IDLE: EraseState = { error: null, message: null };
 
 /**
  * Erases a client on request.

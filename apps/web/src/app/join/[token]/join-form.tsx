@@ -2,7 +2,8 @@
 
 import { useActionState } from 'react';
 import { Button, ErrorNote, Field, Input } from '@/components/ui';
-import { JOIN_IDLE, acceptInvite } from './actions';
+import { acceptInvite } from './actions';
+import { JOIN_IDLE } from './join-state';
 
 export function JoinForm({
   token,

@@ -3,11 +3,8 @@
 import { useActionState, useState } from 'react';
 import { Download, ShieldAlert } from 'lucide-react';
 import { Badge, Button, Card, CardBody, CardHeader, Input } from '@/components/ui';
-import {
-  ERASE_IDLE,
-  eraseClientAction,
-  setMarketingConsentAction,
-} from '../actions';
+import { eraseClientAction, setMarketingConsentAction } from '../actions';
+import { ERASE_IDLE } from '../form-state';
 
 /**
  * Data-subject tools for one client.

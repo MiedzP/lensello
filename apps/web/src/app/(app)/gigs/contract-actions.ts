@@ -15,22 +15,8 @@ import { generateToken, hashToken } from '@/lib/crypto/share-token';
 import { renderContract } from '@/lib/contracts/template';
 import { friendlyDbError } from '@/lib/schema-errors';
 import type { ShootType } from '@lensello/core';
-
-export interface ContractAdminState {
-  error: string | null;
-  message: string | null;
-  /** Shown once, immediately after sending. Never retrievable again. */
-  shareUrl: string | null;
-  /** The rendered draft, so it can be reviewed and edited before sending. */
-  draft: string | null;
-}
-
-export const CONTRACT_ADMIN_IDLE: ContractAdminState = {
-  error: null,
-  message: null,
-  shareUrl: null,
-  draft: null,
-};
+import type { ContractAdminState } from './contract-state';
+import { CONTRACT_ADMIN_IDLE } from './contract-state';
 
 const gigIdSchema = z.string().uuid('Unknown gig.');
 

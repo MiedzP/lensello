@@ -13,12 +13,8 @@ import {
   Input,
   Textarea,
 } from '@/components/ui';
-import {
-  GALLERY_ADMIN_IDLE,
-  applyFavouritesAsSelects,
-  createGallery,
-  revokeGallery,
-} from '../gallery-actions';
+import { applyFavouritesAsSelects, createGallery, revokeGallery } from '../gallery-actions';
+import { GALLERY_ADMIN_IDLE } from '../gallery-state';
 
 export interface GalleryRowView {
   id: string;

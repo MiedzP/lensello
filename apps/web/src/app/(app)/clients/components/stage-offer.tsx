@@ -4,7 +4,8 @@ import { useActionState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { CLIENT_STAGE_LABELS, type ClientStage } from '@lensello/core';
-import { INITIAL_STAGE, setClientStageAction } from '../actions';
+import { setClientStageAction } from '../actions';
+import { INITIAL_STAGE } from '../form-state';
 
 /**
  * Offers the stage a reply usually moves someone to — offers, does not apply.

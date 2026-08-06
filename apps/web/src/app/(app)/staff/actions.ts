@@ -14,6 +14,7 @@ import { requireUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { failed, ok, type ActionState } from '@/lib/staff/action-state';
 import { recordAudit } from '@/lib/privacy/audit';
+import type { CreateAccountState } from './account-state';
 
 const removeSchema = z.object({
   accountId: z.string().uuid('Unknown account.'),
@@ -56,13 +57,6 @@ export async function removeAccount(
 }
 
 // --- creating an account directly ----------------------------------------
-
-export interface CreateAccountState {
-  error: string | null;
-  message: string | null;
-}
-
-export const CREATE_ACCOUNT_IDLE: CreateAccountState = { error: null, message: null };
 
 /** Same floor as every other route in: an account reads the whole client book. */
 const MIN_PASSWORD_LENGTH = 12;

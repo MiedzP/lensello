@@ -15,15 +15,8 @@ import { requireUser } from '@/lib/auth';
 import { generateToken, hashToken } from '@/lib/crypto/share-token';
 import { recordAudit } from '@/lib/privacy/audit';
 import { friendlyDbError } from '@/lib/schema-errors';
-
-export interface InviteState {
-  error: string | null;
-  message: string | null;
-  /** Shown once, immediately after creation. Never retrievable again. */
-  inviteUrl: string | null;
-}
-
-export const INVITE_IDLE: InviteState = { error: null, message: null, inviteUrl: null };
+import type { InviteState } from './invite-state';
+import { INVITE_IDLE } from './invite-state';
 
 const createSchema = z.object({
   // Optional: an open invitation is useful for "send this to whoever you hire",

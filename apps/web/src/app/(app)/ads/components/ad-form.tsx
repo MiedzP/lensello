@@ -31,13 +31,8 @@ import {
 import { centsToBudgetInput } from '@/lib/ads/format';
 import type { CampaignOption, CreativeGroup } from '@/lib/ads/queries';
 import type { CopyVariant } from '@/lib/ads/schema';
-import {
-  createAd,
-  generateAdCopy,
-  updateAd,
-  EMPTY_FORM_STATE,
-  type AdFormState,
-} from '../actions';
+import { createAd, generateAdCopy, updateAd } from '../actions';
+import { EMPTY_FORM_STATE, type AdFormState } from '../form-state';
 import { CopyVariants } from './copy-variants';
 import { CreativePicker } from './creative-picker';
 

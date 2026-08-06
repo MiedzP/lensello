@@ -22,7 +22,8 @@ import {
   type CreativeInput,
   type TextPosition,
 } from '@/lib/creative/spec';
-import { CREATIVE_IDLE, renderAdCreative } from './actions';
+import { renderAdCreative } from './actions';
+import { CREATIVE_IDLE } from './creative-state';
 
 export interface PickerPhoto {
   id: string;

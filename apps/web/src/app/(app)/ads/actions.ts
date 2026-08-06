@@ -27,6 +27,7 @@ import {
   resolveSyncWindow,
   toMetricInserts,
 } from '@/lib/ads/sync';
+import type { AdFormState } from './form-state';
 
 /**
  * All mutations for the ads module.
@@ -46,15 +47,6 @@ import {
 
 /** Cache tag for anything that renders the ads list or an ad's numbers. */
 const ADS_TAG = 'ads';
-
-export interface AdFormState {
-  error: string | null;
-  /** Set on a successful save, so the edit form can confirm rather than
-   *  just going quiet. `createAd` redirects instead. */
-  saved?: boolean;
-}
-
-export const EMPTY_FORM_STATE: AdFormState = { error: null };
 
 export interface ActionResult {
   ok: boolean;

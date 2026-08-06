@@ -17,13 +17,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { hashToken, hashVisitor } from '@/lib/crypto/share-token';
 import { notifyStudio } from '@/lib/notifications/notify';
-
-export interface ContractState {
-  error: string | null;
-  accepted: boolean;
-}
-
-export const CONTRACT_IDLE: ContractState = { error: null, accepted: false };
+import type { ContractState } from './contract-state';
 
 const schema = z.object({
   token: z.string().trim().min(20).max(200),

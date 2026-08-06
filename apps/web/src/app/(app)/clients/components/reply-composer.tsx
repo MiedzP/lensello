@@ -16,12 +16,8 @@ import {
 import { formatCents, type DateOnly } from '@lensello/core';
 import type { UsedFacts } from '@/lib/clients/draft';
 import { formatDateOnly } from '@/lib/clients/format';
-import {
-  INITIAL_SEND,
-  draftReplyAction,
-  sendReplyAction,
-  type DraftResult,
-} from '../actions';
+import { draftReplyAction, sendReplyAction, type DraftResult } from '../actions';
+import { INITIAL_SEND } from '../form-state';
 import { StageOffer } from './stage-offer';
 
 export interface ReplyComposerProps {

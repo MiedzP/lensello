@@ -3,7 +3,8 @@
 import { useActionState } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui';
-import { INITIAL_HANDLED, setMessageHandledAction } from '../actions';
+import { setMessageHandledAction } from '../actions';
+import { INITIAL_HANDLED } from '../form-state';
 
 /** Ticks an inbound message off the queue, or puts it back on. */
 export function HandledToggle({

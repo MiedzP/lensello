@@ -3,7 +3,8 @@
 import { useActionState, useRef } from 'react';
 import { UserPlus } from 'lucide-react';
 import { Button, Card, CardBody, CardHeader, ErrorNote, Field, Input } from '@/components/ui';
-import { CREATE_ACCOUNT_IDLE, createAccountAction } from '../actions';
+import { createAccountAction } from '../actions';
+import { CREATE_ACCOUNT_IDLE } from '../account-state';
 
 /**
  * Making accounts directly, several in a row.

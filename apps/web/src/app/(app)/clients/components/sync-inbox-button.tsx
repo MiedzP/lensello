@@ -3,7 +3,8 @@
 import { useActionState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui';
-import { INITIAL_SYNC, syncInboxAction } from '../actions';
+import { syncInboxAction } from '../actions';
+import { INITIAL_SYNC } from '../form-state';
 
 /**
  * Pulls inbound mail through the Gmail adapter.

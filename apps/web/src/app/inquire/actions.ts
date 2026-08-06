@@ -28,22 +28,7 @@ import {
   type InquiryInput,
 } from '@/lib/inquiries/schema';
 import { InquiryThrottled, submitInquiry } from '@/lib/inquiries/submit';
-
-export interface InquiryState {
-  sent: boolean;
-  error: string | null;
-  /** False when no confirmation actually went out, so the copy can be honest. */
-  emailed: boolean;
-  /** Shown after a successful submit, when a date was given. */
-  availability: 'open' | 'taken' | null;
-}
-
-export const INQUIRY_IDLE: InquiryState = {
-  sent: false,
-  error: null,
-  emailed: false,
-  availability: null,
-};
+import type { InquiryState } from './inquiry-state';
 
 /**
  * The caller's address, from the proxy header Vercel sets.

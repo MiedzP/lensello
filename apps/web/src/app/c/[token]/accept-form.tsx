@@ -3,7 +3,8 @@
 import { useActionState } from 'react';
 import { Check } from 'lucide-react';
 import { Button, ErrorNote, Input } from '@/components/ui';
-import { CONTRACT_IDLE, acceptContract } from './actions';
+import { acceptContract } from './actions';
+import { CONTRACT_IDLE } from './contract-state';
 
 export function AcceptForm({
   token,

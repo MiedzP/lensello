@@ -12,22 +12,8 @@ import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
 import { AD_SIZE_KEYS, type CreativeInput } from '@/lib/creative/spec';
 import { renderCreative } from '@/lib/creative/render';
-
-export interface CreativeState {
-  error: string | null;
-  message: string | null;
-  /** Data URL of the last render, so it can be previewed and downloaded. */
-  preview: string | null;
-  /** Set once saved, so the UI can link to the shoot it landed in. */
-  savedAssetId: string | null;
-}
-
-export const CREATIVE_IDLE: CreativeState = {
-  error: null,
-  message: null,
-  preview: null,
-  savedAssetId: null,
-};
+import type { CreativeState } from './creative-state';
+import { CREATIVE_IDLE } from './creative-state';
 
 const schema = z.object({
   assetId: z.string().uuid('Pick a photograph.'),

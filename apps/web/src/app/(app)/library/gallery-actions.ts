@@ -18,19 +18,7 @@ import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
 import { generateToken, hashPassword, hashToken } from '@/lib/galleries/tokens';
 import { friendlyDbError } from '@/lib/schema-errors';
-
-export interface GalleryAdminState {
-  error: string | null;
-  message: string | null;
-  /** Shown once, immediately after creation. Never retrievable again. */
-  shareUrl: string | null;
-}
-
-export const GALLERY_ADMIN_IDLE: GalleryAdminState = {
-  error: null,
-  message: null,
-  shareUrl: null,
-};
+import type { GalleryAdminState } from './gallery-state';
 
 const createSchema = z.object({
   shootId: z.string().uuid('Unknown shoot.'),

@@ -28,13 +28,8 @@ import {
   unlockCookieName,
   verifyUnlock,
 } from '@/lib/galleries/unlock';
-
-export interface GalleryState {
-  error: string | null;
-  message: string | null;
-}
-
-export const GALLERY_IDLE: GalleryState = { error: null, message: null };
+import type { GalleryState } from './gallery-state';
+import { GALLERY_IDLE } from './gallery-state';
 
 type Admin = ReturnType<typeof createAdmin>;
 

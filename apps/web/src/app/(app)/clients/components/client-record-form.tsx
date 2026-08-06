@@ -20,7 +20,8 @@ import {
 } from '@lensello/core';
 import type { ClientRow } from '@/lib/clients/queries';
 import { CLIENT_SOURCE_LABELS } from '@/lib/clients/stages';
-import { INITIAL_RECORD, updateClientAction } from '../actions';
+import { updateClientAction } from '../actions';
+import { INITIAL_RECORD } from '../form-state';
 
 /** The editable client record. */
 export function ClientRecordForm({ client }: { client: ClientRow }) {

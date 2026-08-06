@@ -5,12 +5,8 @@ import Image from 'next/image';
 import { Heart } from 'lucide-react';
 import { Button, ErrorNote, Input } from '@/components/ui';
 import type { GalleryPhoto } from '@/lib/galleries/queries';
-import {
-  GALLERY_IDLE,
-  approveSelection,
-  toggleFavourite,
-  unlockGallery,
-} from './actions';
+import { approveSelection, toggleFavourite, unlockGallery } from './actions';
+import { GALLERY_IDLE } from './gallery-state';
 
 /**
  * Favouriting is optimistic.

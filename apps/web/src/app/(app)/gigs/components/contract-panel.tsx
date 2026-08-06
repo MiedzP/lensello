@@ -13,12 +13,8 @@ import {
   Input,
   Textarea,
 } from '@/components/ui';
-import {
-  CONTRACT_ADMIN_IDLE,
-  draftContract,
-  sendContract,
-  voidContract,
-} from '../contract-actions';
+import { draftContract, sendContract, voidContract } from '../contract-actions';
+import { CONTRACT_ADMIN_IDLE } from '../contract-state';
 
 export interface ContractRowView {
   id: string;

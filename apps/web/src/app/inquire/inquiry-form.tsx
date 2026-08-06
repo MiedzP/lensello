@@ -17,7 +17,8 @@ import {
   MARKETING_CONSENT_WORDING,
   MAX_MESSAGE_LENGTH,
 } from '@/lib/inquiries/schema';
-import { INQUIRY_IDLE, submitInquiryAction } from './actions';
+import { submitInquiryAction } from './actions';
+import { INQUIRY_IDLE } from './inquiry-state';
 
 export function InquiryForm() {
   const [state, action, pending] = useActionState(

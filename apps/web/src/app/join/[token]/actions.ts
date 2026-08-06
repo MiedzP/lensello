@@ -18,12 +18,7 @@ import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { resolveInvite } from '@/lib/invites/queries';
-
-export interface JoinState {
-  error: string | null;
-}
-
-export const JOIN_IDLE: JoinState = { error: null };
+import type { JoinState } from './join-state';
 
 /** Same floor as /signup: an account reads the entire client book. */
 const MIN_PASSWORD_LENGTH = 12;

@@ -12,7 +12,8 @@ import {
   Field,
   Input,
 } from '@/components/ui';
-import { INVITE_IDLE, createInvite, revokeInvite } from '../invite-actions';
+import { createInvite, revokeInvite } from '../invite-actions';
+import { INVITE_IDLE } from '../invite-state';
 
 export interface InviteRowView {
   id: string;
