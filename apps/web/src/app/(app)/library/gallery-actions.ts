@@ -17,6 +17,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
 import { generateToken, hashPassword, hashToken } from '@/lib/galleries/tokens';
+import { friendlyDbError } from '@/lib/schema-errors';
 
 export interface GalleryAdminState {
   error: string | null;
@@ -100,7 +101,7 @@ export async function createGallery(
 
   if (error) {
     return {
-      error: `The gallery could not be created: ${error.message}`,
+      error: friendlyDbError(error, 'The gallery could not be created.'),
       message: null,
       shareUrl: null,
     };
@@ -144,7 +145,7 @@ export async function revokeGallery(
 
   if (error || !gallery) {
     return {
-      error: `That could not be closed: ${error?.message ?? 'unknown error.'}`,
+      error: friendlyDbError(error, 'That gallery could not be closed.'),
       message: null,
       shareUrl: null,
     };
@@ -206,7 +207,11 @@ export async function applyFavouritesAsSelects(
     .in('id', assetIds);
 
   if (error) {
-    return { error: `That could not be applied: ${error.message}`, message: null, shareUrl: null };
+    return {
+      error: friendlyDbError(error, 'Those picks could not be applied.'),
+      message: null,
+      shareUrl: null,
+    };
   }
 
   revalidatePath(`/library/${gallery.shoot_id}`);

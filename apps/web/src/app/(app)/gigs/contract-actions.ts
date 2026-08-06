@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
 import { generateToken, hashToken } from '@/lib/crypto/share-token';
 import { renderContract } from '@/lib/contracts/template';
+import { friendlyDbError } from '@/lib/schema-errors';
 import type { ShootType } from '@lensello/core';
 
 export interface ContractAdminState {
@@ -142,7 +143,11 @@ export async function sendContract(
   });
 
   if (error) {
-    return { ...CONTRACT_ADMIN_IDLE, error: `Could not send: ${error.message}` };
+    return {
+      ...CONTRACT_ADMIN_IDLE,
+      error: friendlyDbError(error, 'The agreement could not be sent.'),
+      draft: input.body,
+    };
   }
 
   revalidatePath(`/gigs/${input.gigId}`);
@@ -182,7 +187,10 @@ export async function voidContract(
     .maybeSingle();
 
   if (error) {
-    return { ...CONTRACT_ADMIN_IDLE, error: `Could not withdraw: ${error.message}` };
+    return {
+      ...CONTRACT_ADMIN_IDLE,
+      error: friendlyDbError(error, 'The agreement could not be withdrawn.'),
+    };
   }
 
   if (!updated) {

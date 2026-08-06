@@ -24,6 +24,7 @@ import {
 import { requireUser } from '@/lib/auth';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { encryptSecret, isEncryptionConfigured } from '@/lib/crypto/secret-box';
+import { friendlyDbError } from '@/lib/schema-errors';
 import { failed, ok, type ActionState } from '@/lib/connections/action-state';
 import {
   OAUTH_STATE_COOKIE,
@@ -254,7 +255,7 @@ export async function connectMailbox(
     .single();
 
   if (mailboxError || !mailbox) {
-    return failed(`Could not save the mailbox: ${mailboxError?.message ?? 'unknown error.'}`);
+    return failed(friendlyDbError(mailboxError, 'The mailbox could not be saved.'));
   }
 
   const admin = createAdminClient();
