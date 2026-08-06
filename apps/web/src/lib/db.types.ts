@@ -339,6 +339,45 @@ export interface Database {
         Relationships: [];
       };
 
+      contracts: {
+        Row: {
+          id: string;
+          gig_id: string;
+          token_hash: string;
+          body: string;
+          title: string;
+          status: 'draft' | 'sent' | 'accepted' | 'void';
+          sent_at: string | null;
+          expires_at: string | null;
+          accepted_at: string | null;
+          accepted_name: string | null;
+          accepted_ip_hash: string | null;
+          accepted_user_agent: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          gig_id: string;
+          token_hash: string;
+          body: string;
+          title?: string;
+          status?: Database['public']['Tables']['contracts']['Row']['status'];
+          sent_at?: string | null;
+          expires_at?: string | null;
+          accepted_at?: string | null;
+          accepted_name?: string | null;
+          accepted_ip_hash?: string | null;
+          accepted_user_agent?: string | null;
+          created_by?: string | null;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['contracts']['Row'], 'id' | 'created_at'>
+        >;
+        Relationships: [];
+      };
+
       galleries: {
         Row: {
           id: string;

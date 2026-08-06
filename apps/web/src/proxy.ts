@@ -25,6 +25,9 @@ const PUBLIC_PATHS = [
   // session — asking a wedding couple to make an account to see their own
   // photographs is how galleries go unseen.
   '/g',
+  // Contract acceptance. Same reasoning as galleries: the client signing is
+  // not a user of the studio's workspace and must not be given a session.
+  '/c',
   // Cron endpoints have no session to refresh and would be bounced to /login.
   // They are not unprotected: each one checks CRON_SECRET itself and refuses
   // to run when it is unset.

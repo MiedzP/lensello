@@ -22,6 +22,7 @@ import { PaymentsPanel } from '../components/payments-panel';
 import { ShootPanel } from '../components/shoot-panel';
 import { StatusPanel } from '../components/status-panel';
 import { TaskChecklist } from '../components/task-checklist';
+import { ContractPanel, type ContractRowView } from '../components/contract-panel';
 
 export async function generateMetadata(
   props: PageProps<'/gigs/[gigId]'>,
@@ -52,6 +53,24 @@ export default async function GigDetailPage(props: PageProps<'/gigs/[gigId]'>) {
 
   const gig = await getGig(supabase, gigId);
   if (!gig) notFound();
+
+  const { data: contractRows } = await supabase
+    .from('contracts')
+    .select('id, title, status, sent_at, accepted_at, accepted_name, expires_at')
+    .eq('gig_id', gig.id)
+    .order('created_at', { ascending: false });
+
+  // token_hash is deliberately not selected: it must never reach a payload the
+  // browser receives, even though it is only a hash.
+  const contracts: ContractRowView[] = (contractRows ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    sentAt: row.sent_at,
+    acceptedAt: row.accepted_at,
+    acceptedName: row.accepted_name,
+    expiresAt: row.expires_at,
+  }));
 
   const [tasks, clients, shoot] = await Promise.all([
     listGigTasks(supabase, gig.id),
@@ -211,6 +230,8 @@ export default async function GigDetailPage(props: PageProps<'/gigs/[gigId]'>) {
           </Card>
         </div>
       </div>
+
+      <ContractPanel gigId={gig.id} contracts={contracts} />
     </>
   );
 }

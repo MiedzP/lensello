@@ -14,13 +14,13 @@
  * "smith2026" is barely a hash at all.
  */
 
-import {
-  createHash,
-  randomBytes,
-  scrypt as scryptCallback,
-  timingSafeEqual,
-} from 'node:crypto';
+import { scrypt as scryptCallback, randomBytes, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import { generateToken, hashToken, hashVisitor as hashIp } from '@/lib/crypto/share-token';
+
+// Re-exported so existing callers and tests keep one import site, while the
+// primitives themselves live in one place shared with contracts.
+export { generateToken, hashToken };
 
 const scrypt = promisify(scryptCallback) as (
   password: string,
@@ -28,18 +28,8 @@ const scrypt = promisify(scryptCallback) as (
   keylen: number,
 ) => Promise<Buffer>;
 
-const TOKEN_BYTES = 32;
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
-
-/** A new share token. Shown to staff once and never stored in the clear. */
-export function generateToken(): string {
-  return randomBytes(TOKEN_BYTES).toString('base64url');
-}
-
-export function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
 
 /** Returns `scrypt$<salt>$<key>`, both base64url. */
 export async function hashPassword(password: string): Promise<string> {
@@ -69,12 +59,10 @@ export async function verifyPassword(
  *
  * Answers "has anyone opened this gallery", which is what a photographer
  * chasing a client actually needs. It deliberately cannot answer "who, and
- * from where" — that would make the table a visitor-tracking log nobody asked
- * for.
+ * from where".
  */
 export function hashVisitor(ip: string): string {
-  const salt = process.env.LENSELLO_ENCRYPTION_KEY ?? 'lensello';
-  return createHash('sha256').update(`gallery:${salt}:${ip}`).digest('hex');
+  return hashIp(ip, 'gallery');
 }
 
 export type GalleryAccessProblem = 'not_found' | 'revoked' | 'expired';
