@@ -18,6 +18,9 @@ const PUBLIC_PATHS = [
   '/signup',
   '/auth/callback',
   '/auth/error',
+  // The public enquiry form. Bouncing a prospective client to a login screen
+  // would lose the enquiry entirely.
+  '/inquire',
   // Cron endpoints have no session to refresh and would be bounced to /login.
   // They are not unprotected: each one checks CRON_SECRET itself and refuses
   // to run when it is unset.

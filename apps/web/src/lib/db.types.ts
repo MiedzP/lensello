@@ -312,6 +312,7 @@ export interface Database {
           external_id: string | null;
           channel:
             | 'email'
+            | 'form'
             | 'instagram'
             | 'facebook'
             | 'tiktok'
@@ -332,6 +333,24 @@ export interface Database {
         };
         Update: Partial<
           Omit<Database['public']['Tables']['messages']['Row'], 'id' | 'created_at'>
+        >;
+        Relationships: [];
+      };
+
+      /** Service-role only: RLS is enabled with no policies. */
+      inquiry_attempts: {
+        Row: {
+          id: string;
+          ip_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          ip_hash: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['inquiry_attempts']['Row'], 'id'>
         >;
         Relationships: [];
       };

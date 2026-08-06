@@ -14,9 +14,14 @@
     "typecheck": "npm run typecheck --workspace=web",
     "db:push": "supabase db push",
     "db:types": "supabase gen types typescript --linked > supabase/types.generated.ts",
-    "db:types:check": "node scripts/check-db-types.mjs"
+    "db:types:check": "node scripts/check-db-types.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=20.9.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
   }
 }
