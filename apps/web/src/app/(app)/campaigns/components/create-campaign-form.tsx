@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import Link from 'next/link';
 import { Loader2, Sparkles } from 'lucide-react';
 import {
   Button,
@@ -21,6 +22,7 @@ import {
 import { IDLE } from '@/lib/campaigns/action-state';
 import { MAX_POST_COUNT, MIN_POST_COUNT } from '@/lib/campaigns/validation';
 import { PLATFORM_LABELS } from '@/lib/campaigns/display';
+import { linkNote, type PlatformLinks } from '@/lib/connections/links';
 import { createCampaign } from '../actions';
 
 const POST_COUNTS = Array.from(
@@ -28,8 +30,17 @@ const POST_COUNTS = Array.from(
   (_, index) => MIN_POST_COUNT + index,
 );
 
-export function CreateCampaignForm({ aiConfigured }: { aiConfigured: boolean }) {
+export function CreateCampaignForm({
+  aiConfigured,
+  links,
+}: {
+  aiConfigured: boolean;
+  links: PlatformLinks;
+}) {
   const [state, action, pending] = useActionState(createCampaign, IDLE);
+  const firstPublishable = SOCIAL_PLATFORMS.find(
+    (platform) => links[platform].canPublish,
+  );
   // Which button was pressed, so the pending label describes what is happening.
   const [mode, setMode] = useState<'generate' | 'manual'>(
     aiConfigured ? 'generate' : 'manual',
@@ -84,22 +95,50 @@ export function CreateCampaignForm({ aiConfigured }: { aiConfigured: boolean }) 
               Posts are only written for the platforms you pick here.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {SOCIAL_PLATFORMS.map((platform) => (
-                <label
-                  key={platform}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-strong bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover"
-                >
-                  <input
-                    type="checkbox"
-                    name="platforms"
-                    value={platform}
-                    defaultChecked={platform === 'instagram'}
-                    className="size-4 accent-accent"
-                  />
-                  {PLATFORM_LABELS[platform]}
-                </label>
-              ))}
+              {SOCIAL_PLATFORMS.map((platform) => {
+                const link = links[platform];
+                return (
+                  <label
+                    key={platform}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-strong bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover"
+                  >
+                    <input
+                      type="checkbox"
+                      name="platforms"
+                      value={platform}
+                      // Default to what can actually be published to, rather
+                      // than always Instagram — pre-ticking a platform with no
+                      // linked account builds a campaign that cannot ship.
+                      defaultChecked={link.canPublish && platform === firstPublishable}
+                      className="size-4 accent-accent"
+                    />
+                    <span>
+                      {PLATFORM_LABELS[platform]}
+                      <span
+                        className={
+                          link.canPublish
+                            ? 'ml-1.5 text-xs text-muted'
+                            : 'ml-1.5 text-xs text-warning'
+                        }
+                      >
+                        {linkNote(link)}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
             </div>
+
+            {!firstPublishable ? (
+              <p className="mt-2 text-xs text-warning">
+                No account is linked yet, so nothing in this campaign will be
+                able to publish.{' '}
+                <Link href="/connections" className="text-accent hover:underline">
+                  Link an account
+                </Link>
+                . You can still build the campaign now and publish later.
+              </p>
+            ) : null}
           </fieldset>
 
           <Field

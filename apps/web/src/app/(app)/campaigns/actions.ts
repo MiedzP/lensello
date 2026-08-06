@@ -27,25 +27,19 @@ import {
   type SocialPlatform,
 } from '@lensello/core';
 import { buildCampaignPlanPrompt, buildCaptionPrompt } from '@lensello/core/ai';
-import { getIntegrations } from '@lensello/core/integrations';
 import { requireUser } from '@/lib/auth';
-import { createAdminClient } from '@/lib/supabase/admin';
-import {
-  getPublishableAccount,
-  readAccessToken,
-} from '@/lib/connections/queries';
 import { AiError, generateJson, isAiConfigured } from '@/lib/ai';
+import { friendlyDbError } from '@/lib/campaigns/db-errors';
+import { publishOnePost } from '@/lib/campaigns/publish';
 import type { Tables, TablesInsert } from '@/lib/db.types';
 import { failed, ok, type ActionState } from '@/lib/campaigns/action-state';
 import {
-  PUBLISH_URL_TTL_SECONDS,
   getAssetsByIds,
   getCampaign,
   getCampaignPost,
   listAvailableShootTypes,
   listLibraryPhotos,
   shootTypeForAssets,
-  signPhotoUrls,
   toDomainAsset,
   type Db,
   type LibraryShoot,
@@ -53,7 +47,6 @@ import {
 import {
   ALLOWED_POST_TRANSITIONS,
   MAX_ASSETS_PER_POST,
-  PUBLISHABLE_STATUSES,
   addPostSchema,
   campaignPlanResponseSchema,
   captionResponseSchema,
@@ -82,49 +75,6 @@ function textList(formData: FormData, name: string): string[] {
     .filter((value): value is string => typeof value === 'string');
 }
 
-/**
- * Turns a Postgres error into something a photographer can act on.
- *
- * The app validates before writing, so hitting one of these means a check we
- * did not think of fired — the user still deserves a sentence rather than
- * `new row for relation "campaign_posts" violates check constraint ...`.
- */
-function friendlyDbError(message: string, fallback: string): string {
-  const constraints: Array<[string, string]> = [
-    [
-      'campaign_posts_scheduled_needs_time',
-      'A scheduled post needs a date and time.',
-    ],
-    [
-      'campaign_posts_published_needs_time',
-      'A published post needs a publish time, which only the publish action can set.',
-    ],
-    [
-      'campaign_posts_failed_needs_reason',
-      'A failed post needs a failure reason.',
-    ],
-    [
-      'campaign_posts_caption_length',
-      'That caption is too long for the platform.',
-    ],
-    [
-      'campaign_posts_asset_limit',
-      `A post can carry at most ${MAX_ASSETS_PER_POST} photos.`,
-    ],
-    ['campaign_posts_platform_check', 'That is not a platform we can publish to.'],
-    ['campaigns_platforms_valid', 'One of those platforms is not supported.'],
-    [
-      'campaigns_ends_after_starts',
-      'The end date cannot be before the start date.',
-    ],
-    ['campaigns_name_check', 'Give the campaign a name.'],
-  ];
-
-  for (const [needle, friendly] of constraints) {
-    if (message.includes(needle)) return friendly;
-  }
-  return fallback;
-}
 
 function refreshCampaign(campaignId: string): void {
   revalidatePath('/campaigns');
@@ -702,154 +652,6 @@ export async function regenerateCaption(
 
 // --- publishing ---------------------------------------------------------
 
-interface PublishOutcome {
-  ok: boolean;
-  /** One line, safe to show the user. */
-  detail: string;
-}
-
-/**
- * Publishes one post through the social adapter.
- *
- * All outbound traffic goes through `getIntegrations().social`; this module
- * never calls a platform API itself. On failure the row is parked in `failed`
- * with the reason, which is what the detail page surfaces.
- */
-async function publishOnePost(
-  db: Db,
-  post: Tables<'campaign_posts'>,
-): Promise<PublishOutcome> {
-  const label = `${post.platform} post`;
-
-  if (!PUBLISHABLE_STATUSES.includes(post.status as PostStatus)) {
-    return {
-      ok: false,
-      detail:
-        post.status === 'published'
-          ? `${label}: already published.`
-          : `${label}: approve it before publishing.`,
-    };
-  }
-
-  if (post.caption.trim().length === 0) {
-    return { ok: false, detail: `${label}: write a caption first.` };
-  }
-
-  if (post.asset_ids.length === 0) {
-    return {
-      ok: false,
-      detail: `${label}: attach at least one photo — every platform we publish to needs an image.`,
-    };
-  }
-
-  // Photos live in a private bucket, so the platform gets long-lived signed
-  // URLs: it fetches the image itself, sometimes well after the API call.
-  const assets = await getAssetsByIds(db, post.asset_ids);
-  const byId = new Map(assets.map((asset) => [asset.id, asset]));
-  const paths = post.asset_ids.flatMap((assetId) => {
-    const asset = byId.get(assetId);
-    return asset ? [asset.storage_path] : [];
-  });
-
-  const signed = await signPhotoUrls(db, paths, PUBLISH_URL_TTL_SECONDS);
-  const imageUrls = paths.flatMap((path) => {
-    const url = signed.get(path);
-    return url ? [url] : [];
-  });
-
-  if (imageUrls.length !== post.asset_ids.length) {
-    // Nothing was sent anywhere, so the post keeps its current status.
-    return {
-      ok: false,
-      detail: `${label}: could not create signed URLs for every attached photo. Nothing was published.`,
-    };
-  }
-
-  // Resolved outside the try: a misconfigured integration registry is an
-  // environment problem, and parking the post in `failed` over it would blame
-  // the content for something the content cannot fix.
-  let social;
-  try {
-    social = getIntegrations().social;
-  } catch (cause) {
-    return {
-      ok: false,
-      detail: `${label}: publishing is not configured — ${
-        cause instanceof Error ? cause.message : 'no social adapter is available.'
-      }`,
-    };
-  }
-
-  // An unlinked platform is the same class of problem: an environment gap, not
-  // a content one, so the post keeps its status and stays publishable once the
-  // account is linked on /connections.
-  const account = await getPublishableAccount(db, post.platform);
-  if (!account) {
-    return {
-      ok: false,
-      detail: `${label}: ${post.platform} is not linked. Link it on Connections, then publish.`,
-    };
-  }
-
-  const accessToken = await readAccessToken(createAdminClient(), account.id);
-  if (!accessToken) {
-    return {
-      ok: false,
-      detail: `${label}: the ${post.platform} token has expired. Reconnect the account on Connections.`,
-    };
-  }
-
-  try {
-    const result = await social.publish({
-      platform: post.platform,
-      caption: post.caption,
-      hashtags: post.hashtags,
-      imageUrls,
-      accessToken,
-    });
-
-    const { error } = await db
-      .from('campaign_posts')
-      .update({
-        status: 'published',
-        published_at: result.publishedAt,
-        external_id: result.externalId,
-        failure_reason: null,
-      })
-      .eq('id', post.id);
-
-    if (error) {
-      // Worth being loud about: it is live on the platform but our row says
-      // otherwise, and only the id in this message can reconcile it.
-      return {
-        ok: false,
-        detail: `${label}: published as ${result.externalId} but the record could not be updated. ${friendlyDbError(error.message, 'Please retry.')}`,
-      };
-    }
-
-    return { ok: true, detail: `${label}: published.` };
-  } catch (cause) {
-    // The schema requires a non-null reason on a failed post, and a blank one
-    // would render as "Publishing failed." with nothing to act on.
-    const raw = cause instanceof Error ? cause.message.trim() : '';
-    const reason = raw.length > 0 ? raw : 'The platform rejected the post.';
-
-    const { error } = await db
-      .from('campaign_posts')
-      .update({
-        status: 'failed',
-        failure_reason: reason.slice(0, 500),
-      })
-      .eq('id', post.id);
-
-    return {
-      ok: false,
-      detail: error
-        ? `${label}: failed (${reason}). The failure could not be recorded.`
-        : `${label}: failed — ${reason}`,
-    };
-  }
-}
 
 export async function publishPost(
   _previous: ActionState,

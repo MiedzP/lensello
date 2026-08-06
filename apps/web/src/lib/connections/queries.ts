@@ -11,6 +11,7 @@ import { SOCIAL_PLATFORMS, type SocialPlatform } from '@lensello/core';
 import type { Session } from '@/lib/auth';
 import type { Tables } from '@/lib/db.types';
 import type { createAdminClient } from '@/lib/supabase/admin';
+import type { PlatformLink, PlatformLinks } from './links';
 
 type Supabase = Session['supabase'];
 type Admin = ReturnType<typeof createAdminClient>;
@@ -62,6 +63,40 @@ export async function listConnections(supabase: Supabase): Promise<ConnectionVie
     platform,
     account: byPlatform.get(platform) ?? null,
   }));
+}
+
+/**
+ * Link state for every supported platform, keyed by platform.
+ *
+ * A complete record rather than a list of what happens to be linked, so a
+ * caller rendering a platform picker cannot accidentally omit the unlinked
+ * ones — those are exactly the entries worth showing.
+ */
+export async function listPlatformLinks(supabase: Supabase): Promise<PlatformLinks> {
+  const { data, error } = await supabase
+    .from('social_accounts')
+    .select('platform, handle, status, can_publish');
+
+  if (error) {
+    throw new Error(`Could not load linked accounts: ${error.message}`);
+  }
+
+  const byPlatform = new Map((data ?? []).map((row) => [row.platform, row]));
+
+  return Object.fromEntries(
+    SOCIAL_PLATFORMS.map((platform) => {
+      const account = byPlatform.get(platform);
+      return [
+        platform,
+        {
+          platform,
+          handle: account?.handle ?? null,
+          status: account ? account.status : ('unlinked' as const),
+          canPublish: account?.status === 'connected' && account.can_publish,
+        } satisfies PlatformLink,
+      ];
+    }),
+  ) as PlatformLinks;
 }
 
 /** Linked accounts that can actually be synced for messages. */

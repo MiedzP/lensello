@@ -4,16 +4,18 @@ import { ChevronLeft } from 'lucide-react';
 import { PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
 import { isAiConfigured } from '@/lib/ai';
+import { listPlatformLinks } from '@/lib/connections/queries';
 import { CreateCampaignForm } from '../components/create-campaign-form';
 
 export const metadata: Metadata = { title: 'New campaign' };
 
 export default async function NewCampaignPage() {
-  await requireUserOrRedirect();
+  const { supabase } = await requireUserOrRedirect();
 
   // Resolved on the server: the client must never see whether a key exists,
   // only whether the button is offered.
   const aiConfigured = isAiConfigured();
+  const links = await listPlatformLinks(supabase);
 
   return (
     <>
@@ -34,7 +36,7 @@ export default async function NewCampaignPage() {
         }
       />
 
-      <CreateCampaignForm aiConfigured={aiConfigured} />
+      <CreateCampaignForm aiConfigured={aiConfigured} links={links} />
     </>
   );
 }

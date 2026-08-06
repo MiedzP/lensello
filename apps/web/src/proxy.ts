@@ -13,7 +13,16 @@ import { createServerClient } from '@supabase/ssr';
  * protects data.
  */
 
-const PUBLIC_PATHS = ['/login', '/signup', '/auth/callback', '/auth/error'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/signup',
+  '/auth/callback',
+  '/auth/error',
+  // Cron endpoints have no session to refresh and would be bounced to /login.
+  // They are not unprotected: each one checks CRON_SECRET itself and refuses
+  // to run when it is unset.
+  '/api/cron',
+];
 
 /** Signed-in visitors have no use for these and are sent to the dashboard. */
 const SIGNED_OUT_ONLY = ['/login', '/signup'];

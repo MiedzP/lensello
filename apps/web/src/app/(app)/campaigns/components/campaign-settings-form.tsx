@@ -21,6 +21,7 @@ import {
 } from '@lensello/core';
 import { IDLE } from '@/lib/campaigns/action-state';
 import { CAMPAIGN_STATUS_LABELS, PLATFORM_LABELS } from '@/lib/campaigns/display';
+import { linkNote, type PlatformLinks } from '@/lib/connections/links';
 import { updateCampaign } from '../actions';
 
 export interface CampaignSettings {
@@ -35,7 +36,13 @@ export interface CampaignSettings {
   endsOn: string | null;
 }
 
-export function CampaignSettingsForm({ campaign }: { campaign: CampaignSettings }) {
+export function CampaignSettingsForm({
+  campaign,
+  links,
+}: {
+  campaign: CampaignSettings;
+  links: PlatformLinks;
+}) {
   const [state, action, pending] = useActionState(updateCampaign, IDLE);
 
   return (
@@ -127,21 +134,35 @@ export function CampaignSettingsForm({ campaign }: { campaign: CampaignSettings 
               Platforms
             </legend>
             <div className="mt-2 flex flex-wrap gap-2">
-              {SOCIAL_PLATFORMS.map((platform) => (
-                <label
-                  key={platform}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-strong bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover"
-                >
-                  <input
-                    type="checkbox"
-                    name="platforms"
-                    value={platform}
-                    defaultChecked={campaign.platforms.includes(platform)}
-                    className="size-4 accent-accent"
-                  />
-                  {PLATFORM_LABELS[platform]}
-                </label>
-              ))}
+              {SOCIAL_PLATFORMS.map((platform) => {
+                const link = links[platform];
+                return (
+                  <label
+                    key={platform}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-strong bg-surface px-3 py-2 text-sm text-foreground transition-colors hover:bg-surface-hover"
+                  >
+                    <input
+                      type="checkbox"
+                      name="platforms"
+                      value={platform}
+                      defaultChecked={campaign.platforms.includes(platform)}
+                      className="size-4 accent-accent"
+                    />
+                    <span>
+                      {PLATFORM_LABELS[platform]}
+                      <span
+                        className={
+                          link.canPublish
+                            ? 'ml-1.5 text-xs text-muted'
+                            : 'ml-1.5 text-xs text-warning'
+                        }
+                      >
+                        {linkNote(link)}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </fieldset>
 

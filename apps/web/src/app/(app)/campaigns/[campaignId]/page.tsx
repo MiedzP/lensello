@@ -24,10 +24,13 @@ import {
 import {
   CAMPAIGN_STATUS_LABELS,
   CAMPAIGN_STATUS_TONES,
+  PLATFORM_LABELS,
   POST_STATUS_LABELS,
   POST_STATUS_TONES,
   formatDateWindow,
 } from '@/lib/campaigns/display';
+import { listPlatformLinks } from '@/lib/connections/queries';
+import { linkNote, unpublishablePlatforms } from '@/lib/connections/links';
 import { uuidSchema } from '@/lib/campaigns/validation';
 import { CampaignSettingsForm } from '../components/campaign-settings-form';
 import { PostCard } from '../components/post-card';
@@ -68,6 +71,11 @@ export default async function CampaignDetailPage(
   const platforms = campaignPlatforms(campaign, SOCIAL_PLATFORMS);
   const dropped = Number(typeof search.dropped === 'string' ? search.dropped : 0);
   const aiConfigured = isAiConfigured();
+
+  const links = await listPlatformLinks(supabase);
+  // Only the platforms this campaign actually targets. Warning about an
+  // unlinked platform the campaign never uses is noise.
+  const blocked = unpublishablePlatforms(links, platforms);
 
   return (
     <>
@@ -122,8 +130,33 @@ export default async function CampaignDetailPage(
         </div>
       ) : null}
 
+      {blocked.length > 0 ? (
+        <div
+          role="status"
+          className="mb-6 rounded-md border border-warning/30 bg-warning-subtle px-4 py-3 text-sm text-warning"
+        >
+          This campaign targets{' '}
+          {blocked.map((link, index) => (
+            <span key={link.platform}>
+              {index > 0 ? (index === blocked.length - 1 ? ' and ' : ', ') : null}
+              <span className="font-medium">
+                {PLATFORM_LABELS[link.platform]}
+              </span>{' '}
+              ({linkNote(link)})
+            </span>
+          ))}
+          . Posts for {blocked.length === 1 ? 'it' : 'those'} cannot publish
+          until the {blocked.length === 1 ? 'account is' : 'accounts are'}{' '}
+          linked.{' '}
+          <Link href="/connections" className="underline">
+            Open Connections
+          </Link>
+        </div>
+      ) : null}
+
       <div className="space-y-6">
         <CampaignSettingsForm
+          links={links}
           campaign={{
             id: campaign.id,
             name: campaign.name,
@@ -181,6 +214,7 @@ export default async function CampaignDetailPage(
           key={posts.length}
           campaignId={campaign.id}
           campaignPlatforms={platforms}
+          links={links}
         />
       </div>
     </>
