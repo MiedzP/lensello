@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Plus, Target } from 'lucide-react';
+import { Plus, Target, Wand2 } from 'lucide-react';
 import { Card, EmptyState, ErrorNote, PageHeader, Stat } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
 import { listAdsWithPerformance, summarizeAll } from '@/lib/ads/queries';
@@ -34,10 +34,16 @@ export default async function AdsPage(props: PageProps<'/ads'>) {
         title="Ads"
         description="Ad creative, budgets, and performance."
         action={
-          <LinkButton href="/ads/new" variant="primary">
-            <Plus size={16} aria-hidden="true" />
-            New ad
-          </LinkButton>
+          <div className="flex gap-2">
+            <LinkButton href="/ads/creative">
+              <Wand2 size={16} aria-hidden="true" />
+              Ad creative
+            </LinkButton>
+            <LinkButton href="/ads/new" variant="primary">
+              <Plus size={16} aria-hidden="true" />
+              New ad
+            </LinkButton>
+          </div>
         }
       />
 
