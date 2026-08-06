@@ -33,9 +33,12 @@ function formatWhen(iso: string | null): string {
 export function ConnectionCard({
   platform,
   account,
+  simulated,
 }: {
   platform: SocialAccountRow['platform'];
   account: SocialAccountRow | null;
+  /** True when the adapter behind this is the mock, not the platform. */
+  simulated: boolean;
 }) {
   const [connectState, connectAction, connecting] = useActionState(
     startConnection,
@@ -64,7 +67,12 @@ export function ConnectionCard({
             </p>
           </div>
 
-          {isLinked ? (
+          {isLinked && simulated ? (
+            // Never a green "Connected" for a link to the simulator. The
+            // follower count and handle below are invented, and a badge that
+            // reads as real is how that gets mistaken for a live account.
+            <Badge tone="warning">Simulated</Badge>
+          ) : isLinked ? (
             <Badge tone="success">Connected</Badge>
           ) : isExpired ? (
             <Badge tone="warning">
@@ -74,6 +82,15 @@ export function ConnectionCard({
             <Badge tone="neutral">Not linked</Badge>
           )}
         </div>
+
+        {isLinked && simulated ? (
+          <p className="rounded-md border border-warning/30 bg-warning-subtle px-3 py-2 text-xs text-warning">
+            This is the built-in simulator. The handle and follower count below
+            are invented, nothing posts to Instagram, and collecting messages
+            files made-up enquiries as real clients. It becomes real once
+            META_APP_ID and META_APP_SECRET are set and Meta approves the app.
+          </p>
+        ) : null}
 
         {account ? (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
@@ -153,7 +170,11 @@ export function ConnectionCard({
             <input type="hidden" name="platform" value={platform} />
             <Button type="submit" variant="primary" disabled={connecting}>
               <Link2 size={14} aria-hidden="true" />
-              {connecting ? 'Opening…' : `Connect ${label}`}
+              {connecting
+                ? 'Opening…'
+                : simulated
+                  ? `Connect ${label} (simulated)`
+                  : `Connect ${label}`}
             </Button>
           </form>
         )}

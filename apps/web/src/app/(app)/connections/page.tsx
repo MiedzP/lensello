@@ -4,10 +4,15 @@ import { getIntegrations } from '@lensello/core/integrations';
 import { Card, CardBody, ErrorNote, PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
 import { listConnections } from '@/lib/connections/queries';
+import {
+  UNSUPPORTED_PLATFORMS,
+  isConnectable,
+} from '@/lib/connections/links';
 import { getPrimaryMailbox } from '@/lib/mailboxes/queries';
 import { isEncryptionConfigured } from '@/lib/crypto/secret-box';
 import { ConnectionCard } from './components/connection-card';
 import { MailboxCard, type MailboxView } from './components/mailbox-card';
+import { EnquiryFormCard } from './components/enquiry-form-card';
 import { SyncMessagesForm } from './components/sync-messages-form';
 
 export const metadata: Metadata = { title: 'Connections' };
@@ -31,6 +36,14 @@ const REASON_COPY: Record<string, string> = {
     'The account was authorized but could not be saved, so it has not been ' +
     'linked. Try again.',
   platform: 'That is not a platform Lensello supports.',
+};
+
+
+const PLATFORM_LABEL: Record<string, string> = {
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  tiktok: 'TikTok',
+  pinterest: 'Pinterest',
 };
 
 export default async function ConnectionsPage(props: PageProps<'/connections'>) {
@@ -125,17 +138,52 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
       ) : null}
 
       <section className="mt-6 space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">Email</h2>
-        <MailboxCard mailbox={mailboxView} encryptionReady={encryptionReady} />
+        <h2 className="text-sm font-semibold text-foreground">Working now</h2>
+        <p className="max-w-prose text-sm text-muted">
+          These need nobody&rsquo;s approval and bring real enquiries in today.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <EnquiryFormCard />
+          <MailboxCard mailbox={mailboxView} encryptionReady={encryptionReady} />
+        </div>
       </section>
 
-      <section className="mt-6 space-y-3">
+      <section className="mt-8 space-y-3">
         <h2 className="text-sm font-semibold text-foreground">Social accounts</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          {connections.map(({ platform, account }) => (
-            <ConnectionCard key={platform} platform={platform} account={account} />
-          ))}
+          {connections
+            // Only platforms with a live adapter are offered. A Connect button
+            // for the others could only ever produce a convincing simulation.
+            .filter(({ platform }) => isConnectable(platform))
+            .map(({ platform, account }) => (
+              <ConnectionCard
+                key={platform}
+                platform={platform}
+                account={account}
+                simulated={mode === 'mock'}
+              />
+            ))}
         </div>
+
+        <Card>
+          <CardBody className="space-y-2 text-sm text-muted">
+            <p className="font-medium text-foreground">Not available yet</p>
+            <p>
+              These have no adapter written, so there is nothing to connect to.
+              They are listed for honesty rather than hidden.
+            </p>
+            <ul className="mt-1 space-y-1.5">
+              {UNSUPPORTED_PLATFORMS.map(({ platform, reason }) => (
+                <li key={platform} className="text-xs">
+                  <span className="font-medium text-foreground">
+                    {PLATFORM_LABEL[platform]}
+                  </span>{' '}
+                  — {reason}
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
       </section>
 
       <Card className="mt-6">

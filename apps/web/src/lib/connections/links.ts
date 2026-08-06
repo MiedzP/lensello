@@ -51,3 +51,42 @@ export function unpublishablePlatforms(
 ): PlatformLink[] {
   return platforms.map((platform) => links[platform]).filter((link) => !link.canPublish);
 }
+
+/**
+ * Which platforms Lensello can actually talk to.
+ *
+ * Only Instagram has a live adapter, and even that is unverified. Facebook,
+ * TikTok and Pinterest have none — the Meta adapter rejects them outright, and
+ * nothing else implements them. Offering a Connect button for those produced a
+ * convincing simulation and nothing else: a green "Connected" badge, an
+ * invented follower count, and no path to making any of it real.
+ *
+ * So they are listed as unavailable rather than offered. A button that can only
+ * ever lie is worse than no button.
+ */
+export const CONNECTABLE_PLATFORMS: readonly SocialPlatform[] = ['instagram'];
+
+export const UNSUPPORTED_PLATFORMS: ReadonlyArray<{
+  platform: SocialPlatform;
+  reason: string;
+}> = [
+  {
+    platform: 'facebook',
+    reason:
+      'Needs a Page adapter and Meta App Review. Shares the Meta app with Instagram, so it becomes cheap once that is approved.',
+  },
+  {
+    platform: 'tiktok',
+    reason:
+      'Needs an adapter against TikTok’s own API and their developer approval. Nothing is written yet.',
+  },
+  {
+    platform: 'pinterest',
+    reason:
+      'Needs an adapter against Pinterest’s API. It also has no messaging product, so it would be publishing only.',
+  },
+];
+
+export function isConnectable(platform: SocialPlatform): boolean {
+  return CONNECTABLE_PLATFORMS.includes(platform);
+}
