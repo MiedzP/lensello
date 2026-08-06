@@ -35,6 +35,17 @@ const nextConfig: NextConfig = {
     qualities: [50, 75, 90],
   },
 
+  /**
+   * Kept out of the bundle and required at runtime instead.
+   *
+   * All three break when bundled into a serverless function: `sharp` ships a
+   * platform-specific native binary that the bundler cannot inline, and
+   * `imapflow` and `nodemailer` reach for Node internals and dynamic requires.
+   * The failure mode is a module that will not load, which surfaces as a bare
+   * Internal Server Error rather than anything that names the cause.
+   */
+  serverExternalPackages: ['sharp', 'imapflow', 'nodemailer'],
+
   typedRoutes: true,
 };
 
