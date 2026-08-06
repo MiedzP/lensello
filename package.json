@@ -16,7 +16,8 @@
     "db:types": "supabase gen types typescript --linked > supabase/types.generated.ts",
     "db:types:check": "node scripts/check-db-types.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck:test": "npm run typecheck:test --workspace=web"
   },
   "engines": {
     "node": ">=20.9.0"

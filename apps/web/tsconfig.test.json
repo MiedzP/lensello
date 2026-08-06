@@ -1,0 +1,23 @@
+{
+  // The production build must not typecheck tests — `vitest` is a workspace-root
+  // devDependency and is not resolvable from inside apps/web on a clean install,
+  // which is exactly how it broke a deploy once. So tsconfig.json excludes them
+  // and this config puts them back for `npm run typecheck:test`.
+  //
+  // Vitest itself transpiles rather than typechecks, so without this the test
+  // files would never be typechecked by anything.
+  "extends": "./tsconfig.json",
+  // `include` replaces the base list rather than adding to it, so Next's
+  // generated globals (PageProps, RouteContext) have to be repeated here or
+  // every page in the graph fails to resolve them.
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "exclude": ["node_modules"]
+}
