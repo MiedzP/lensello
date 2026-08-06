@@ -13,6 +13,7 @@ import {
 } from '@/components/ui';
 import { IDLE } from '@/lib/connections/action-state';
 import { connectMailbox, disconnectMailbox } from '../actions';
+import { MailboxHelp } from './mailbox-help';
 
 export interface MailboxView {
   id: string;
@@ -24,14 +25,6 @@ export interface MailboxView {
   lastError: string | null;
   lastSyncedLabel: string;
 }
-
-/** Where each provider hides app passwords, so nobody has to go hunting. */
-const APP_PASSWORD_HELP: Array<{ match: RegExp; label: string; url: string }> = [
-  { match: /@(gmail|googlemail)\.com$/i, label: 'Google app passwords', url: 'https://myaccount.google.com/apppasswords' },
-  { match: /@(outlook|hotmail|live)\.com$/i, label: 'Microsoft app passwords', url: 'https://account.microsoft.com/security' },
-  { match: /@(icloud|me)\.com$/i, label: 'Apple app-specific passwords', url: 'https://account.apple.com' },
-  { match: /@yahoo\.com$/i, label: 'Yahoo app passwords', url: 'https://login.yahoo.com/account/security' },
-];
 
 export function MailboxCard({
   mailbox,
@@ -51,8 +44,6 @@ export function MailboxCard({
 
   const [address, setAddress] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-
-  const help = APP_PASSWORD_HELP.find((entry) => entry.match.test(address));
 
   if (mailbox) {
     return (
@@ -176,29 +167,9 @@ export function MailboxCard({
             />
           </Field>
 
-          <Field
-            label="App password"
-            htmlFor="mailbox-password"
-            required
-            hint={
-              help ? (
-                <>
-                  Not your normal password — generate one at{' '}
-                  <a
-                    href={help.url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="text-accent hover:underline"
-                  >
-                    {help.label}
-                  </a>
-                  . Two-factor authentication must be on.
-                </>
-              ) : (
-                'Not your normal password. Most providers call this an app password, and require two-factor authentication first.'
-              )
-            }
-          >
+          <MailboxHelp email={address} />
+
+          <Field label="App password" htmlFor="mailbox-password" required>
             <Input
               id="mailbox-password"
               name="password"
