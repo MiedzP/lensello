@@ -378,7 +378,7 @@ export async function syncMessages(
  * one connection you set up in one place and had to sync in another, which is
  * the kind of inconsistency people read as the feature not existing.
  */
-export async function syncMailbox(_previous: ActionState): Promise<ActionState> {
+export async function syncMailbox(): Promise<ActionState> {
   const { supabase } = await requireUser();
 
   try {
