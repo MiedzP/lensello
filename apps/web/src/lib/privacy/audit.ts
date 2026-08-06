@@ -24,6 +24,8 @@ export type AuditAction =
   | 'mailbox.disconnected'
   | 'social.connected'
   | 'social.disconnected'
+  | 'account.invited'
+  | 'account.invite_revoked'
   | 'account.removed';
 
 export interface AuditInput {

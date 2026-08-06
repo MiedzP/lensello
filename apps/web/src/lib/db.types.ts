@@ -339,6 +339,38 @@ export interface Database {
         Relationships: [];
       };
 
+      invites: {
+        Row: {
+          id: string;
+          token_hash: string;
+          email: string | null;
+          role: 'staff';
+          note: string | null;
+          expires_at: string | null;
+          revoked_at: string | null;
+          accepted_at: string | null;
+          accepted_by: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          token_hash: string;
+          email?: string | null;
+          role?: 'staff';
+          note?: string | null;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+          created_by?: string | null;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['invites']['Row'], 'id' | 'created_at'>
+        >;
+        Relationships: [];
+      };
+
       contracts: {
         Row: {
           id: string;

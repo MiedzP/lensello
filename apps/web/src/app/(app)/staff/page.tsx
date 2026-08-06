@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { listStaff } from '@/lib/staff/queries';
 import { addedLabel, exactTime, signInLabel } from '@/lib/staff/format';
 import { StaffList, type StaffRowView } from './components/staff-list';
+import { InvitePanel, type InviteRowView } from './components/invite-panel';
 
 export const metadata: Metadata = { title: 'Staff' };
 
@@ -42,6 +43,23 @@ export default async function StaffPage() {
 
   const signUpEnabled = Boolean(process.env.LENSELLO_SIGNUP_CODE?.trim());
 
+  // token_hash is deliberately not selected — it must never reach a payload
+  // the browser receives, even hashed.
+  const { data: inviteRows } = await supabase
+    .from('invites')
+    .select('id, email, note, expires_at, revoked_at, accepted_at, created_at')
+    .order('created_at', { ascending: false });
+
+  const invites: InviteRowView[] = (inviteRows ?? []).map((row) => ({
+    id: row.id,
+    email: row.email,
+    note: row.note,
+    expiresAt: row.expires_at,
+    revokedAt: row.revoked_at,
+    acceptedAt: row.accepted_at,
+    createdAt: row.created_at,
+  }));
+
   return (
     <>
       <PageHeader
@@ -61,6 +79,8 @@ export default async function StaffPage() {
         )}
       </Card>
 
+      {isOwner ? <InvitePanel invites={invites} /> : null}
+
       {isOwner ? (
         <Card className="mt-6">
           <CardBody className="flex gap-3 text-sm text-muted">
@@ -70,7 +90,9 @@ export default async function StaffPage() {
               aria-hidden="true"
             />
             <div className="space-y-1">
-              <p className="font-medium text-foreground">Adding someone</p>
+              <p className="font-medium text-foreground">
+                Adding someone without an invitation
+              </p>
               {signUpEnabled ? (
                 <p>
                   Send them <span className="text-foreground">/signup</span> along

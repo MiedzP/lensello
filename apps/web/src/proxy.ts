@@ -16,6 +16,9 @@ import { createServerClient } from '@supabase/ssr';
 const PUBLIC_PATHS = [
   '/login',
   '/signup',
+  // Invitation links. The person opening one has no account yet — that is
+  // what they are for.
+  '/join',
   '/auth/callback',
   '/auth/error',
   // The public enquiry form. Bouncing a prospective client to a login screen
