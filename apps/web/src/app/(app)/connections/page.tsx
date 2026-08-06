@@ -55,6 +55,7 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
   const reason = typeof params.reason === 'string' ? params.reason : null;
 
   const connections = await listConnections(supabase);
+  const connectable = connections.filter(({ platform }) => isConnectable(platform));
 
   const mailbox = await getPrimaryMailbox(supabase);
   const encryptionReady = isEncryptionConfigured();
@@ -122,16 +123,9 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
               Running against the built-in simulator
             </p>
             <p>
-              Linking, publishing, and message collection all work end to end,
-              but they talk to Lensello&rsquo;s mock adapter rather than to
-              Instagram, Facebook, TikTok, or Pinterest. Nothing here posts to a
-              real account and nothing here reads a real inbox.
-            </p>
-            <p>
-              Real accounts need approved API access from each platform — Meta
-              app review for Instagram and Facebook, and the equivalent
-              elsewhere. Once those credentials exist, the live adapter drops in
-              behind this same screen and nothing on it changes.
+              Ads, calendar sync and payments still return invented data rather
+              than talking to anything. Email and the enquiry form above are
+              real as soon as they are set up; social is covered below.
             </p>
           </CardBody>
         </Card>
@@ -150,12 +144,9 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
 
       <section className="mt-8 space-y-3">
         <h2 className="text-sm font-semibold text-foreground">Social accounts</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {connections
-            // Only platforms with a live adapter are offered. A Connect button
-            // for the others could only ever produce a convincing simulation.
-            .filter(({ platform }) => isConnectable(platform))
-            .map(({ platform, account }) => (
+        {connectable.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {connectable.map(({ platform, account }) => (
               <ConnectionCard
                 key={platform}
                 platform={platform}
@@ -163,14 +154,17 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
                 simulated={mode === 'mock'}
               />
             ))}
-        </div>
+          </div>
+        ) : null}
 
         <Card>
           <CardBody className="space-y-2 text-sm text-muted">
             <p className="font-medium text-foreground">Not available yet</p>
             <p>
-              These have no adapter written, so there is nothing to connect to.
-              They are listed for honesty rather than hidden.
+              None of these can be connected, so none is offered. Each needs an
+              adapter and that platform&rsquo;s own approval before there is
+              anything real to link to. Listed rather than hidden, so the gap is
+              visible instead of looking like a missing feature.
             </p>
             <ul className="mt-1 space-y-1.5">
               {UNSUPPORTED_PLATFORMS.map(({ platform, reason }) => (
