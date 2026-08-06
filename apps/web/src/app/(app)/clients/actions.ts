@@ -69,7 +69,7 @@ export async function syncInboxAction(previous: SyncState): Promise<SyncState> {
   const token = previous.token + 1;
 
   try {
-    const result = await syncInboundMail(supabase);
+    const result = await syncInboundMail(supabase, createAdminClient());
     revalidatePath('/clients');
 
     const parts: string[] = [];

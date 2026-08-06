@@ -16,13 +16,16 @@
  * code that two concurrent requests can both pass.
  */
 
-import { getIntegrations, type InboundMessage } from '@lensello/core/integrations';
+import type { InboundMessage } from '@lensello/core/integrations';
+import { resolveMailClient } from '@/lib/mailboxes/queries';
+import type { createAdminClient } from '@/lib/supabase/admin';
 import type { ClientSource } from '@lensello/core';
 import type { Session } from '@/lib/auth';
 import type { TablesInsert } from '@/lib/db.types';
 import { nameFromEmail } from './format';
 
 type Supabase = Session['supabase'];
+type Admin = ReturnType<typeof createAdminClient>;
 
 export interface SyncResult {
   fetched: number;
@@ -170,12 +173,20 @@ async function resolveClients(
   return { ids, created };
 }
 
-export async function syncInboundMail(supabase: Supabase): Promise<SyncResult> {
-  const { mail } = getIntegrations();
+export async function syncInboundMail(
+  supabase: Supabase,
+  admin: Admin,
+): Promise<SyncResult> {
+  // The CONNECTED mailbox first, falling back to the registry. Going straight
+  // to `getIntegrations()` here — which is what this did — meant a studio that
+  // had connected its own mailbox would send replies from it and then never
+  // read it, because sending and syncing resolved their client differently.
+  // Half-connected, with nothing to indicate it.
+  const { mail } = await resolveMailClient(supabase, admin);
   const since = await resolveSince(supabase);
 
-  // Adapter only. Never `fetch()` Gmail from a module — swapping mock for live
-  // has to stay a one-file change.
+  // Adapter only. Never `fetch()` a mail server from a module — swapping mock
+  // for live has to stay a one-file change.
   const fetched = await mail.fetchInbox(since);
 
   return fileInboundMessages(supabase, fetched);
