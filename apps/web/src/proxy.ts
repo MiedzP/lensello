@@ -21,6 +21,10 @@ const PUBLIC_PATHS = [
   // The public enquiry form. Bouncing a prospective client to a login screen
   // would lose the enquiry entirely.
   '/inquire',
+  // Client galleries. Access is the unguessable token in the URL, not a
+  // session — asking a wedding couple to make an account to see their own
+  // photographs is how galleries go unseen.
+  '/g',
   // Cron endpoints have no session to refresh and would be bounced to /login.
   // They are not unprotected: each one checks CRON_SECRET itself and refuses
   // to run when it is unset.

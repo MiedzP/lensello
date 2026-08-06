@@ -14,6 +14,8 @@ import { AssetFiltersForm } from '../components/asset-filters';
 import { AssetWorkspace } from '../components/asset-workspace';
 import { ShootHeader } from '../components/shoot-header';
 import { UploadPanel } from '../components/upload-panel';
+import { GalleryPanel, type GalleryRowView } from '../components/gallery-panel';
+import { summarizeGalleries } from '@/lib/galleries/queries';
 
 // Static: a per-shoot title would cost an extra read of a row this page has
 // already fetched below, and metadata resolves before the page body.
@@ -39,12 +41,28 @@ export default async function ShootPage(props: PageProps<'/library/[shootId]'>) 
 
   const filters = parseAssetFilters(searchParams);
 
-  const [assets, tags, counts, clients] = await Promise.all([
+  const [assets, tags, counts, clients, galleries] = await Promise.all([
     listAssets(supabase, shootId, filters, detail.shoot.cover_asset_id),
     listShootTags(supabase, shootId),
     getShootCounts(supabase, shootId),
     listClientOptions(supabase),
+    summarizeGalleries(supabase, shootId),
   ]);
+
+  // Flattened for the client boundary: the panel needs counts and dates, not
+  // the gallery rows themselves, and `token_hash` must never cross into a
+  // payload the browser receives.
+  const galleryRows: GalleryRowView[] = galleries.map((entry) => ({
+    id: entry.gallery.id,
+    title: entry.gallery.title,
+    hasPassword: entry.gallery.password_hash !== null,
+    expiresAt: entry.gallery.expires_at,
+    revokedAt: entry.gallery.revoked_at,
+    favouriteCount: entry.favouriteCount,
+    viewCount: entry.viewCount,
+    lastViewedAt: entry.lastViewedAt,
+    approvedAt: entry.approvedAt,
+  }));
 
   return (
     <>
@@ -71,6 +89,8 @@ export default async function ShootPage(props: PageProps<'/library/[shootId]'>) 
         isFiltered={isAssetFiltered(filters)}
         hasAnyAssets={counts.total > 0}
       />
+
+      <GalleryPanel shootId={shootId} galleries={galleryRows} />
     </>
   );
 }

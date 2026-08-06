@@ -339,6 +339,96 @@ export interface Database {
         Relationships: [];
       };
 
+      galleries: {
+        Row: {
+          id: string;
+          shoot_id: string;
+          token_hash: string;
+          title: string;
+          message: string | null;
+          password_hash: string | null;
+          expires_at: string | null;
+          revoked_at: string | null;
+          allow_downloads: boolean;
+          download_quality: 'web' | 'full';
+          watermark: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          shoot_id: string;
+          token_hash: string;
+          title?: string;
+          message?: string | null;
+          password_hash?: string | null;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          allow_downloads?: boolean;
+          download_quality?: Database['public']['Tables']['galleries']['Row']['download_quality'];
+          watermark?: boolean;
+          created_by?: string | null;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['galleries']['Row'], 'id' | 'created_at'>
+        >;
+        Relationships: [];
+      };
+
+      gallery_favourites: {
+        Row: {
+          gallery_id: string;
+          asset_id: string;
+          created_at: string;
+        };
+        Insert: {
+          gallery_id: string;
+          asset_id: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+
+      gallery_approvals: {
+        Row: {
+          gallery_id: string;
+          approved_at: string;
+          approved_name: string;
+          note: string | null;
+          favourite_count: number;
+        };
+        Insert: {
+          gallery_id: string;
+          approved_at?: string;
+          approved_name?: string;
+          note?: string | null;
+          favourite_count?: number;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['gallery_approvals']['Row'], 'gallery_id'>
+        >;
+        Relationships: [];
+      };
+
+      gallery_views: {
+        Row: {
+          id: string;
+          gallery_id: string;
+          ip_hash: string | null;
+          downloaded: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          gallery_id: string;
+          ip_hash?: string | null;
+          downloaded?: boolean;
+        };
+        Update: never;
+        Relationships: [];
+      };
+
       client_consents: {
         Row: {
           id: string;
