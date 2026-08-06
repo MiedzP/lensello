@@ -7,6 +7,7 @@ import { listStaff } from '@/lib/staff/queries';
 import { addedLabel, exactTime, signInLabel } from '@/lib/staff/format';
 import { StaffList, type StaffRowView } from './components/staff-list';
 import { InvitePanel, type InviteRowView } from './components/invite-panel';
+import { CreateAccountForm } from './components/create-account-form';
 
 export const metadata: Metadata = { title: 'Staff' };
 
@@ -78,6 +79,8 @@ export default async function StaffPage() {
           </CardBody>
         )}
       </Card>
+
+      {isOwner ? <CreateAccountForm /> : null}
 
       {isOwner ? <InvitePanel invites={invites} /> : null}
 
