@@ -38,6 +38,7 @@ import {
   readAccessToken,
 } from '@/lib/connections/queries';
 import { syncSocialMessages } from '@/lib/connections/sync';
+import { syncInboundMail } from '@/lib/clients/sync';
 
 const platformSchema = z.object({
   platform: z.enum(SOCIAL_PLATFORMS),
@@ -367,4 +368,39 @@ export async function syncMessages(
   return failures.length > 0
     ? { error: failures.join(' '), message: summary }
     : ok(summary);
+}
+
+/**
+ * Pulls mail from the connected mailbox.
+ *
+ * The same work the "Sync inbox" button on Clients does, offered here as well.
+ * Every social account on this page has a Collect button; the mailbox was the
+ * one connection you set up in one place and had to sync in another, which is
+ * the kind of inconsistency people read as the feature not existing.
+ */
+export async function syncMailbox(_previous: ActionState): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  try {
+    const result = await syncInboundMail(supabase, createAdminClient());
+    revalidatePath('/connections');
+    revalidatePath('/clients');
+
+    const parts = [
+      result.newMessages === 0
+        ? 'No new messages.'
+        : `Filed ${result.newMessages} new ${result.newMessages === 1 ? 'message' : 'messages'}.`,
+    ];
+    if (result.newClients > 0) {
+      parts.push(
+        `${result.newClients} new ${result.newClients === 1 ? 'client' : 'clients'}.`,
+      );
+    }
+    if (result.skipped > 0) {
+      parts.push(`${result.skipped} skipped — no usable sender.`);
+    }
+    return ok(parts.join(' '));
+  } catch (cause) {
+    return failed(describe(cause, 'The mailbox could not be read.'));
+  }
 }

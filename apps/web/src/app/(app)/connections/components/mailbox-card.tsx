@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { Mail, Plug, Unlink } from 'lucide-react';
+import { Mail, Plug, RefreshCw, Unlink } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -12,7 +12,7 @@ import {
   Input,
 } from '@/components/ui';
 import { IDLE } from '@/lib/connections/action-state';
-import { connectMailbox, disconnectMailbox } from '../actions';
+import { connectMailbox, disconnectMailbox, syncMailbox } from '../actions';
 import { MailboxHelp } from './mailbox-help';
 
 export interface MailboxView {
@@ -41,6 +41,7 @@ export function MailboxCard({
     disconnectMailbox,
     IDLE,
   );
+  const [syncState, syncAction, syncing] = useActionState(syncMailbox, IDLE);
 
   const [address, setAddress] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -97,9 +98,34 @@ export function MailboxCard({
               {disconnectState.error}
             </p>
           ) : null}
+
+          {syncState.error ? (
+            <p role="status" aria-live="polite" className="text-xs text-danger">
+              {syncState.error}
+            </p>
+          ) : null}
+          {syncState.message ? (
+            <p role="status" aria-live="polite" className="text-xs text-muted">
+              {syncState.message}
+            </p>
+          ) : null}
         </CardBody>
 
         <CardFooter>
+          {/* The same work as "Sync inbox" on Clients. Offered here too because
+              every social account on this page has a Collect button, and the
+              mailbox lacking one read as the feature not existing. */}
+          <form action={syncAction}>
+            <Button type="submit" disabled={syncing || disconnecting}>
+              <RefreshCw
+                size={14}
+                aria-hidden="true"
+                className={syncing ? 'animate-spin' : undefined}
+              />
+              {syncing ? 'Reading…' : 'Sync now'}
+            </Button>
+          </form>
+
           <form action={disconnectAction}>
             <input type="hidden" name="mailboxId" value={mailbox.id} />
             <Button type="submit" disabled={disconnecting}>
