@@ -16,6 +16,12 @@ export const AD_SIZES = {
   instagram_portrait: { label: 'Instagram portrait', width: 1080, height: 1350 },
   instagram_story: { label: 'Instagram story', width: 1080, height: 1920 },
   facebook_feed: { label: 'Facebook feed', width: 1200, height: 630 },
+  // IAB standard display sizes. The fitting loop is what makes these usable —
+  // type scaled off a 250px short edge would otherwise overflow the canvas.
+  display_rectangle: { label: 'Display rectangle', width: 300, height: 250 },
+  display_leaderboard: { label: 'Leaderboard', width: 728, height: 90 },
+  display_half_page: { label: 'Half page', width: 300, height: 600 },
+  display_billboard: { label: 'Billboard', width: 970, height: 250 },
 } as const;
 
 export type AdSizeKey = keyof typeof AD_SIZES;
@@ -24,8 +30,23 @@ export const AD_SIZE_KEYS = Object.keys(AD_SIZES) as AdSizeKey[];
 
 export type TextPosition = 'bottom' | 'centre';
 
+export const CUSTOM_SIZE = 'custom';
+
+/**
+ * Guard rails on a hand-entered canvas. Below this, text is unreadable at any
+ * type scale; above it, sharp composites megapixels nobody asked for.
+ */
+// 50 because 320x50 and 728x90 are standard banner formats. A higher floor
+// silently clamped them to something else and rendered a canvas nobody asked
+// for, which is worse than refusing outright.
+export const MIN_DIMENSION = 50;
+export const MAX_DIMENSION = 4000;
+
 export interface CreativeInput {
-  size: AdSizeKey;
+  size: AdSizeKey | typeof CUSTOM_SIZE;
+  /** Used only when `size` is 'custom'. */
+  customWidth?: number;
+  customHeight?: number;
   headline: string;
   subline: string;
   callToAction: string;
@@ -57,8 +78,28 @@ export interface CreativeLayout {
  * banner's tiny; the short edge is what the eye actually judges text size
  * against on a phone.
  */
-export function layoutFor(input: CreativeInput): CreativeLayout {
+function clampDimension(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(MAX_DIMENSION, Math.max(MIN_DIMENSION, Math.round(value)));
+}
+
+/** The canvas, from a preset or from hand-entered numbers. */
+export function dimensionsFor(input: CreativeInput): { width: number; height: number } {
+  if (input.size === CUSTOM_SIZE) {
+    return {
+      width: clampDimension(input.customWidth, 1080),
+      height: clampDimension(input.customHeight, 1080),
+    };
+  }
+  // Destructured, not returned wholesale: the preset carries a `label` the
+  // declared type does not admit to, and it would ride along into anything
+  // that spread this.
   const { width, height } = AD_SIZES[input.size];
+  return { width, height };
+}
+
+export function layoutFor(input: CreativeInput): CreativeLayout {
+  const { width, height } = dimensionsFor(input);
   const short = Math.min(width, height);
 
   return {
@@ -151,7 +192,8 @@ const HEADLINE_LINES = 3;
 const SUBLINE_LINES = 2;
 
 /**
- * Lays the text block out and returns finished coordinates.
+ * Lays the text block out at a given type scale and returns finished
+ * coordinates.
  *
  * Callers consume positions; they do not compute them. That is the whole point
  * of this function existing. When the renderer and the measurer each did their
@@ -163,15 +205,15 @@ const SUBLINE_LINES = 2;
  * Laid out from zero, measured, then offset — so the anchoring rule lives in
  * one place and the geometry above it never has to know about it.
  */
-export function composeBlock(input: CreativeInput): ComposedBlock {
+function composeAt(input: CreativeInput, typeScale: number): ComposedBlock {
   const layout = layoutFor(input);
   const { width, height } = layout;
 
   const padPx = layout.padding * height;
-  const headlinePx = layout.headlineSize * height;
-  const sublinePx = layout.sublineSize * height;
-  const ctaPx = layout.ctaSize * height;
-  const studioPx = layout.studioSize * height;
+  const headlinePx = layout.headlineSize * height * typeScale;
+  const sublinePx = layout.sublineSize * height * typeScale;
+  const ctaPx = layout.ctaSize * height * typeScale;
+  const studioPx = layout.studioSize * height * typeScale;
 
   const headlineLines = wrapText(
     input.headline,
@@ -255,4 +297,37 @@ export function escapeXml(value: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+/**
+ * Lays the block out, shrinking the type until it fits the canvas.
+ *
+ * The type scale is derived from the short edge, which is right for the square
+ * and portrait presets but falls apart on a shape the presets never covered —
+ * a 970x250 banner has a short edge of 250, so a headline sized off it plus a
+ * subline plus a pill is taller than the canvas. Before custom dimensions
+ * existed that could not happen; now it can, and the block would simply run off
+ * the bottom, which is the exact bug the bottom-anchoring fixed once already.
+ *
+ * So the block is measured and, if it overflows, re-laid at a smaller scale.
+ * Iterated rather than solved in one step because wrapping changes with the
+ * type size: smaller text fits more words per line, which can remove a line
+ * entirely and change the height non-linearly.
+ */
+export function composeBlock(input: CreativeInput): ComposedBlock {
+  const { height } = dimensionsFor(input);
+
+  let scale = 1;
+  let block = composeAt(input, scale);
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const available = height - block.padPx * 2;
+    if (block.blockHeight <= available) break;
+
+    // Overshoot slightly so a borderline fit does not need another pass.
+    scale *= Math.max(0.35, (available / block.blockHeight) * 0.95);
+    block = composeAt(input, scale);
+  }
+
+  return block;
 }

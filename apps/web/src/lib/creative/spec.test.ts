@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   AD_SIZES,
+  CUSTOM_SIZE,
+  MAX_DIMENSION,
+  MIN_DIMENSION,
   charsPerLine,
   composeBlock,
+  dimensionsFor,
   escapeXml,
   layoutFor,
   wrapText,
@@ -156,5 +160,83 @@ describe('composeBlock', () => {
     const without = composeBlock({ ...base, callToAction: '' });
     expect(without.blockHeight).toBeLessThan(withCta.blockHeight);
     expect(without.ctaHeight).toBe(0);
+  });
+});
+
+describe('custom dimensions', () => {
+  it('uses hand-entered numbers', () => {
+    expect(
+      dimensionsFor({ ...base, size: CUSTOM_SIZE, customWidth: 970, customHeight: 250 }),
+    ).toEqual({ width: 970, height: 250 });
+  });
+
+  it('clamps absurd values rather than trying to render them', () => {
+    expect(
+      dimensionsFor({ ...base, size: CUSTOM_SIZE, customWidth: 99999, customHeight: 10 }),
+    ).toEqual({ width: MAX_DIMENSION, height: MIN_DIMENSION });
+  });
+
+  it('falls back to square when the numbers are missing or nonsense', () => {
+    expect(dimensionsFor({ ...base, size: CUSTOM_SIZE })).toEqual({ width: 1080, height: 1080 });
+    expect(
+      dimensionsFor({ ...base, size: CUSTOM_SIZE, customWidth: NaN, customHeight: NaN }),
+    ).toEqual({ width: 1080, height: 1080 });
+  });
+
+  it('rounds fractional pixels', () => {
+    expect(
+      dimensionsFor({ ...base, size: CUSTOM_SIZE, customWidth: 800.6, customHeight: 400.2 }),
+    ).toEqual({ width: 801, height: 400 });
+  });
+
+  it('still honours the presets', () => {
+    for (const key of Object.keys(AD_SIZES) as (keyof typeof AD_SIZES)[]) {
+      expect(dimensionsFor({ ...base, size: key })).toEqual({
+        width: AD_SIZES[key].width,
+        height: AD_SIZES[key].height,
+      });
+    }
+  });
+});
+
+describe('fitting the block to an arbitrary canvas', () => {
+  /**
+   * The reason custom sizes needed the fitting loop: type is scaled off the
+   * short edge, so on a wide banner a headline plus subline plus pill is taller
+   * than the whole canvas. It would have run off the bottom exactly as it did
+   * before bottom-anchoring — silently, with no error.
+   */
+  const shapes = [
+    { w: 970, h: 250, name: 'billboard banner' },
+    { w: 728, h: 90, name: 'leaderboard' },
+    { w: 300, h: 600, name: 'half page' },
+    { w: 320, h: 50, name: 'mobile banner' },
+    { w: 4000, h: 4000, name: 'oversized square' },
+    { w: 200, h: 200, name: 'smallest allowed' },
+  ];
+
+  for (const { w, h, name } of shapes) {
+    it(`keeps the block on the canvas: ${name} (${w}x${h})`, () => {
+      const block = composeBlock({
+        ...base,
+        size: CUSTOM_SIZE,
+        customWidth: w,
+        customHeight: h,
+        headline: 'Autumn wedding dates still open across the North West',
+        subline: 'Full-day coverage, two photographers, albums included',
+        callToAction: 'Check your date',
+      });
+
+      expect(block.blockTopPx).toBeGreaterThanOrEqual(0);
+      expect(block.blockTopPx + block.blockHeight).toBeLessThanOrEqual(h + 0.5);
+    });
+  }
+
+  it('leaves a comfortable canvas at full size', () => {
+    // The fitting loop must not shrink type that already fits, or every
+    // ordinary square ad would come out smaller than designed.
+    const square = composeBlock({ ...base, size: 'instagram_square' });
+    const expected = layoutFor({ ...base, size: 'instagram_square' });
+    expect(square.headlinePx).toBeCloseTo(expected.headlineSize * expected.height, 5);
   });
 });

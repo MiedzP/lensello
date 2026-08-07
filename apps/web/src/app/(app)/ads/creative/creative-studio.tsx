@@ -16,7 +16,11 @@ import {
 import {
   AD_SIZES,
   AD_SIZE_KEYS,
+  CUSTOM_SIZE,
+  MAX_DIMENSION,
+  MIN_DIMENSION,
   composeBlock,
+  dimensionsFor,
   layoutFor,
   type AdSizeKey,
   type CreativeInput,
@@ -49,7 +53,9 @@ export function CreativeStudio({
   const [state, action, pending] = useActionState(renderAdCreative, CREATIVE_IDLE);
 
   const [assetId, setAssetId] = useState(photos[0]?.id ?? '');
-  const [size, setSize] = useState<AdSizeKey>('instagram_square');
+  const [size, setSize] = useState<AdSizeKey | typeof CUSTOM_SIZE>('instagram_square');
+  const [customWidth, setCustomWidth] = useState('1080');
+  const [customHeight, setCustomHeight] = useState('1350');
   const [headline, setHeadline] = useState('Autumn dates still open');
   const [subline, setSubline] = useState('');
   const [callToAction, setCallToAction] = useState('Check your date');
@@ -61,6 +67,8 @@ export function CreativeStudio({
 
   const input: CreativeInput = {
     size,
+    customWidth: Number(customWidth),
+    customHeight: Number(customHeight),
     headline,
     subline,
     callToAction,
@@ -75,8 +83,9 @@ export function CreativeStudio({
   // composeBlock is multiplied by one ratio. Anything computed independently
   // here would be a second source of truth, which is the bug this replaced.
   const previewWidth = 360;
-  const previewHeight = (layout.height / layout.width) * previewWidth;
-  const scale = previewWidth / layout.width;
+  const canvas = dimensionsFor(input);
+  const previewHeight = (canvas.height / canvas.width) * previewWidth;
+  const scale = previewWidth / canvas.width;
   const px = (canvasPx: number) => canvasPx * scale;
 
 
@@ -145,13 +154,16 @@ export function CreativeStudio({
                   id="creative-size"
                   name="size"
                   value={size}
-                  onChange={(event) => setSize(event.target.value as AdSizeKey)}
+                  onChange={(event) =>
+                    setSize(event.target.value as AdSizeKey | typeof CUSTOM_SIZE)
+                  }
                 >
                   {AD_SIZE_KEYS.map((key) => (
                     <option key={key} value={key}>
                       {AD_SIZES[key].label} · {AD_SIZES[key].width}×{AD_SIZES[key].height}
                     </option>
                   ))}
+                  <option value={CUSTOM_SIZE}>Custom size…</option>
                 </Select>
               </Field>
 
@@ -166,6 +178,41 @@ export function CreativeStudio({
                 </Select>
               </Field>
             </div>
+
+            {size === CUSTOM_SIZE ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Width"
+                  htmlFor="creative-width"
+                  hint={`${MIN_DIMENSION}–${MAX_DIMENSION} pixels.`}
+                >
+                  <Input
+                    id="creative-width"
+                    name="customWidth"
+                    inputMode="numeric"
+                    value={customWidth}
+                    onChange={(event) => setCustomWidth(event.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="Height"
+                  htmlFor="creative-height"
+                  hint={`${MIN_DIMENSION}–${MAX_DIMENSION} pixels.`}
+                >
+                  <Input
+                    id="creative-height"
+                    name="customHeight"
+                    inputMode="numeric"
+                    value={customHeight}
+                    onChange={(event) => setCustomHeight(event.target.value)}
+                  />
+                </Field>
+                <p className="text-xs text-muted sm:col-span-2">
+                  Any shape works — the type shrinks to fit, so a wide banner
+                  gets smaller text rather than text that runs off the edge.
+                </p>
+              </div>
+            ) : null}
 
             <Field label="Headline" htmlFor="creative-headline">
               <Input
@@ -346,7 +393,7 @@ export function CreativeStudio({
               <img src={state.preview} alt="Rendered ad creative" className="w-full rounded-md" />
               <a
                 href={state.preview}
-                download={`lensello-${size}.png`}
+                download={`lensello-${size === CUSTOM_SIZE ? `${canvas.width}x${canvas.height}` : size}.png`}
                 className="inline-flex h-9 items-center gap-2 rounded-md border border-strong bg-surface px-3 text-sm font-medium text-foreground transition-colors hover:bg-surface-hover"
               >
                 <Download size={14} aria-hidden="true" />

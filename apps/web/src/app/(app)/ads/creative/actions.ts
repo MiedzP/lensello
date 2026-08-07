@@ -10,14 +10,45 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth';
-import { AD_SIZE_KEYS, type CreativeInput } from '@/lib/creative/spec';
+import {
+  AD_SIZE_KEYS,
+  CUSTOM_SIZE,
+  MAX_DIMENSION,
+  MIN_DIMENSION,
+  type CreativeInput,
+} from '@/lib/creative/spec';
 import { renderCreative } from '@/lib/creative/render';
 import type { CreativeState } from './creative-state';
 import { CREATIVE_IDLE } from './creative-state';
 
 const schema = z.object({
   assetId: z.string().uuid('Pick a photograph.'),
-  size: z.enum(AD_SIZE_KEYS as [string, ...string[]]),
+  size: z.enum([CUSTOM_SIZE, ...AD_SIZE_KEYS] as [string, ...string[]]),
+  // Bounded here as well as in `dimensionsFor`. The clamp there keeps a render
+  // sane; this tells the person what they typed was out of range instead of
+  // quietly producing a different canvas.
+  customWidth: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value ? Number(value) : undefined))
+    .refine(
+      (value) =>
+        value === undefined ||
+        (Number.isFinite(value) && value >= MIN_DIMENSION && value <= MAX_DIMENSION),
+      `Width must be between ${MIN_DIMENSION} and ${MAX_DIMENSION} pixels.`,
+    ),
+  customHeight: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value ? Number(value) : undefined))
+    .refine(
+      (value) =>
+        value === undefined ||
+        (Number.isFinite(value) && value >= MIN_DIMENSION && value <= MAX_DIMENSION),
+      `Height must be between ${MIN_DIMENSION} and ${MAX_DIMENSION} pixels.`,
+    ),
   headline: z.string().trim().max(120),
   subline: z.string().trim().max(160),
   callToAction: z.string().trim().max(40),
@@ -35,6 +66,8 @@ function parse(formData: FormData) {
   return schema.safeParse({
     assetId: formData.get('assetId'),
     size: formData.get('size'),
+    customWidth: formData.get('customWidth') ?? undefined,
+    customHeight: formData.get('customHeight') ?? undefined,
     headline: formData.get('headline') ?? '',
     subline: formData.get('subline') ?? '',
     callToAction: formData.get('callToAction') ?? '',
@@ -76,6 +109,8 @@ export async function renderAdCreative(
 
   const spec: CreativeInput = {
     size: input.size as CreativeInput['size'],
+    customWidth: input.customWidth,
+    customHeight: input.customHeight,
     headline: input.headline,
     subline: input.subline,
     callToAction: input.callToAction,
@@ -107,7 +142,11 @@ export async function renderAdCreative(
   // Saved into the same shoot as the source photograph, so it stays with the
   // work it came from and is selectable as ad creative.
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const path = `${asset.shoot_id}/creative-${input.size}-${stamp}.png`;
+  const sizeLabel =
+    input.size === CUSTOM_SIZE
+      ? `${input.customWidth ?? 1080}x${input.customHeight ?? 1080}`
+      : input.size;
+  const path = `${asset.shoot_id}/creative-${sizeLabel}-${stamp}.png`;
 
   const { error: uploadError } = await supabase.storage
     .from('photos')
@@ -122,7 +161,7 @@ export async function renderAdCreative(
     .insert({
       shoot_id: asset.shoot_id,
       storage_path: path,
-      filename: `creative-${input.size}.png`,
+      filename: `creative-${sizeLabel}.png`,
       mime_type: 'image/png',
       byte_size: png.byteLength,
       // Tagged so composites are filterable, and so nobody mistakes one for an
