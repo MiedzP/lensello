@@ -10,6 +10,7 @@ import {
 } from '@/lib/connections/links';
 import { getPrimaryMailbox } from '@/lib/mailboxes/queries';
 import { isEncryptionConfigured } from '@/lib/crypto/secret-box';
+import { CalendarCard } from './components/calendar-card';
 import { ConnectionCard } from './components/connection-card';
 import { MailboxCard, type MailboxView } from './components/mailbox-card';
 import { EnquiryFormCard } from './components/enquiry-form-card';
@@ -156,6 +157,32 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
         <div className="grid gap-4 sm:grid-cols-2">
           <EnquiryFormCard />
           <MailboxCard mailbox={mailboxView} encryptionReady={encryptionReady} />
+        </div>
+      </section>
+
+      <section className="mt-8 space-y-3">
+        <h2 className="text-sm font-semibold text-foreground">Bookings</h2>
+        <p className="max-w-prose text-sm text-muted">
+          Where confirmed gigs are written, so the studio&rsquo;s diary and this
+          app agree about what is booked.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <CalendarCard
+            status={status.calendar}
+            // Only read back once something is configured: these come from the
+            // environment, and showing a half-set value would suggest a
+            // connection that the status beside it says does not exist.
+            calendarId={
+              status.calendar === 'live'
+                ? (process.env.GOOGLE_CALENDAR_ID?.trim() ?? null)
+                : null
+            }
+            serviceAccount={
+              status.calendar === 'live'
+                ? (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim() ?? null)
+                : null
+            }
+          />
         </div>
       </section>
 

@@ -136,7 +136,11 @@ export function StatusPanel({
             {hasCalendarEvent
               ? 'This gig has an event id, but it was issued by the built-in simulator — nothing was written to a real calendar.'
               : 'Confirming a gig records an event against the built-in simulator, not a real calendar.'}{' '}
-            Keep booking times in your own diary until a calendar is connected.
+            Keep booking times in your own diary until a calendar is connected —{' '}
+            <Link href="/connections" className="font-medium underline underline-offset-2">
+              the steps are on Connections
+            </Link>
+            .
           </p>
         )}
       </CardBody>
