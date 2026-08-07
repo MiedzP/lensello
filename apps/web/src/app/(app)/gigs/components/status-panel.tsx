@@ -22,10 +22,13 @@ export function StatusPanel({
   gigId,
   status,
   hasCalendarEvent,
+  calendarStatus,
 }: {
   gigId: string;
   status: GigStatus;
   hasCalendarEvent: boolean;
+  /** Whether a real calendar is behind the sync, or the simulator. */
+  calendarStatus: 'live' | 'mock' | 'unavailable';
 }) {
   const [state, formAction, pending] = useActionState(setGigStatus, EMPTY_STATUS_STATE);
   const targets = GIG_TRANSITIONS[status];
@@ -117,11 +120,25 @@ export function StatusPanel({
           ))}
         </form>
 
-        <p className="text-xs text-muted">
-          {hasCalendarEvent
-            ? 'This gig is on the connected calendar. Editing its times updates the event; moving it off “confirmed” or cancelling removes it.'
-            : 'Confirming a gig adds it to the connected calendar.'}
-        </p>
+        {calendarStatus === 'live' ? (
+          <p className="text-xs text-muted">
+            {hasCalendarEvent
+              ? 'This gig is on the studio calendar. Editing its times updates the event; moving it off “confirmed” or cancelling removes it.'
+              : 'Confirming a gig adds it to the studio calendar.'}
+          </p>
+        ) : (
+          // The event id below is real and the sync logic runs, but it points at
+          // the simulator. Saying "the connected calendar" here is how somebody
+          // stops checking their actual diary for a booking that was never
+          // written to it.
+          <p className="rounded-md border border-warning/30 bg-warning-subtle px-3 py-2 text-xs text-warning">
+            <span className="font-medium">Calendar sync is simulated.</span>{' '}
+            {hasCalendarEvent
+              ? 'This gig has an event id, but it was issued by the built-in simulator — nothing was written to a real calendar.'
+              : 'Confirming a gig records an event against the built-in simulator, not a real calendar.'}{' '}
+            Keep booking times in your own diary until a calendar is connected.
+          </p>
+        )}
       </CardBody>
     </Card>
   );

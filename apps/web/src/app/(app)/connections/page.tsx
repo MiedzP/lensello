@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Share2 } from 'lucide-react';
-import { getIntegrations } from '@lensello/core/integrations';
+import { getIntegrations, integrationStatus } from '@lensello/core/integrations';
 import { Card, CardBody, ErrorNote, PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
 import { listConnections } from '@/lib/connections/queries';
@@ -46,6 +46,12 @@ const PLATFORM_LABEL: Record<string, string> = {
   pinterest: 'Pinterest',
 };
 
+/** "a", "a and b", "a, b and c" — the list reads as a sentence, not an array. */
+function listSentence(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
 export default async function ConnectionsPage(props: PageProps<'/connections'>) {
   const { supabase } = await requireUserOrRedirect();
 
@@ -89,6 +95,16 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
     modeError = cause instanceof Error ? cause.message : 'No adapter is available.';
   }
 
+  // Named individually rather than as a fixed sentence: each of these can go
+  // live on its own, and a list that keeps naming a capability after it was
+  // connected is the same problem in the opposite direction.
+  const status = integrationStatus();
+  const simulated = [
+    status.ads === 'mock' ? 'Ads' : null,
+    status.calendar === 'mock' ? 'calendar sync' : null,
+    status.payments === 'mock' ? 'payments' : null,
+  ].filter((label): label is string => label !== null);
+
   const anyCollectable = connections.some(
     ({ account }) => account?.status === 'connected' && account.can_collect_messages,
   );
@@ -116,16 +132,17 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
         </Card>
       ) : null}
 
-      {mode === 'mock' ? (
+      {mode === 'mock' && simulated.length > 0 ? (
         <Card className="mt-4">
           <CardBody className="space-y-2 text-sm text-muted">
             <p className="font-medium text-foreground">
               Running against the built-in simulator
             </p>
             <p>
-              Ads, calendar sync and payments still return invented data rather
-              than talking to anything. Email and the enquiry form above are
-              real as soon as they are set up; social is covered below.
+              {listSentence(simulated)}{' '}
+              {simulated.length === 1 ? 'still returns' : 'still return'} invented
+              data rather than talking to anything. Email and the enquiry form
+              above are real as soon as they are set up; social is covered below.
             </p>
           </CardBody>
         </Card>

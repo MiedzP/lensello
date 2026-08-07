@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, MapPin } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { GIG_STATUS_LABELS, SHOOT_TYPE_LABELS, formatCents } from '@lensello/core';
+import { integrationStatus } from '@lensello/core/integrations';
 import { Badge, Button, Card, CardBody, CardHeader, PageHeader } from '@/components/ui';
 import { getSession, requireUserOrRedirect } from '@/lib/auth';
 import {
@@ -156,6 +157,7 @@ export default async function GigDetailPage(props: PageProps<'/gigs/[gigId]'>) {
             gigId={gig.id}
             status={gig.status}
             hasCalendarEvent={gig.calendar_event_id !== null}
+            calendarStatus={integrationStatus().calendar}
           />
 
           <PaymentsPanel

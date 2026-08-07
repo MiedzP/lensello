@@ -23,6 +23,10 @@ import { createMetaSocialGateway, isMetaConfigured } from './live/meta';
 import { createStripePaymentClient, isStripeConfigured } from './live/stripe';
 import { createMetaAdManager, isMetaAdsConfigured } from './live/meta-ads';
 import {
+  createGoogleCalendarClient,
+  isGoogleCalendarConfigured,
+} from './live/google-calendar';
+import {
   IntegrationError,
   NotImplementedError,
   type AdManager,
@@ -115,8 +119,14 @@ export function getIntegrations(): Integrations {
   });
 
   const calendar = lazy<CalendarClient>(() => {
+    if (isGoogleCalendarConfigured()) return createGoogleCalendarClient();
     if (mode === 'mock') return mocks.calendar;
-    throw new NotImplementedError('google', 'calendar sync');
+    throw new NotImplementedError(
+      'google-calendar',
+      'calendar sync. Set GOOGLE_SERVICE_ACCOUNT_EMAIL, ' +
+        'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY and GOOGLE_CALENDAR_ID, and share ' +
+        'the studio calendar with the service account',
+    );
   });
 
   const payments = lazy<PaymentClient>(() => {
@@ -163,6 +173,7 @@ export function integrationStatus(): {
   mail: 'live' | 'mock' | 'unavailable';
   payments: 'live' | 'mock' | 'unavailable';
   ads: 'live' | 'mock' | 'unavailable';
+  calendar: 'live' | 'mock' | 'unavailable';
 } {
   const mode = resolveMode();
   const describe = (configured: boolean) =>
@@ -174,6 +185,7 @@ export function integrationStatus(): {
     mail: describe(isPostmarkConfigured()),
     payments: describe(isStripeConfigured()),
     ads: describe(isMetaAdsConfigured()),
+    calendar: describe(isGoogleCalendarConfigured()),
   };
 }
 
