@@ -21,6 +21,7 @@ import { createMockIntegrations } from './mock';
 import { createPostmarkMailClient, isPostmarkConfigured } from './live/postmark';
 import { createMetaSocialGateway, isMetaConfigured } from './live/meta';
 import { createStripePaymentClient, isStripeConfigured } from './live/stripe';
+import { createMetaAdManager, isMetaAdsConfigured } from './live/meta-ads';
 import {
   IntegrationError,
   NotImplementedError,
@@ -104,8 +105,13 @@ export function getIntegrations(): Integrations {
   });
 
   const ads = lazy<AdManager>(() => {
+    if (isMetaAdsConfigured()) return createMetaAdManager();
     if (mode === 'mock') return mocks.ads;
-    throw new NotImplementedError('meta', 'ad management');
+    throw new NotImplementedError(
+      'meta-ads',
+      'ad management. Set META_AD_ACCOUNT_ID and META_ADS_ACCESS_TOKEN, and ' +
+        'complete Meta App Review for ads_management',
+    );
   });
 
   const calendar = lazy<CalendarClient>(() => {
@@ -156,6 +162,7 @@ export function integrationStatus(): {
   social: 'live' | 'mock' | 'unavailable';
   mail: 'live' | 'mock' | 'unavailable';
   payments: 'live' | 'mock' | 'unavailable';
+  ads: 'live' | 'mock' | 'unavailable';
 } {
   const mode = resolveMode();
   const describe = (configured: boolean) =>
@@ -166,6 +173,7 @@ export function integrationStatus(): {
     social: describe(isMetaConfigured()),
     mail: describe(isPostmarkConfigured()),
     payments: describe(isStripeConfigured()),
+    ads: describe(isMetaAdsConfigured()),
   };
 }
 
