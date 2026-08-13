@@ -32,7 +32,7 @@ export default async function BusinessProfilePage() {
     ? await getProfileName(supabase, profile.updated_by)
     : null;
 
-  function worksheetHref(key: 'positioning' | 'target_client' | 'brand_voice' | 'pricing' | 'swot' | 'seven_ps' | 'customer_journey') {
+  function worksheetHref(key: 'positioning' | 'target_client' | 'brand_voice' | 'price_point' | 'swot' | 'seven_ps' | 'customer_journey') {
     const link = worksheetLinks.get(key);
     if (!link) return undefined;
     return `/academy/${link.moduleSlug}/${link.lessonSlug}`;
@@ -120,8 +120,8 @@ export default async function BusinessProfilePage() {
               field="price_point"
               label="Pricing approach"
               value={profile?.price_point ?? null}
-              worksheetHref={worksheetHref('pricing')}
-              worksheetLabel={worksheetLabel('pricing')}
+              worksheetHref={worksheetHref('price_point')}
+              worksheetLabel={worksheetLabel('price_point')}
             />
             <ProfileTextField
               field="brand_voice"

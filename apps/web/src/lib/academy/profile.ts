@@ -17,33 +17,14 @@ import type { AnswerValue, ProfileKey, WorksheetAnswers, WorksheetField } from '
  * worksheet whose answer becomes the column value. Every other field in that
  * worksheet is scaffolding — it helps the photographer think, but only the
  * summary/statement field is what the rest of the platform reads back. */
-const SCALAR_ROLLUP_FIELD: Record<'positioning' | 'target_client' | 'brand_voice' | 'pricing', string> = {
+const SCALAR_ROLLUP_FIELD: Record<
+  'positioning' | 'target_client' | 'brand_voice' | 'price_point',
+  string
+> = {
   positioning: 'statement',
   target_client: 'summary',
   brand_voice: 'summary',
-  pricing: 'summary',
-};
-
-/**
- * The scalar `profile_key` values map onto a `business_profile` column of
- * the identical name — except `pricing`, which does not: the column is
- * `price_point` (see `20260813120600_academy.sql`, where
- * `academy_worksheets.profile_key` allows `'pricing'` while
- * `business_profile` has no such column). That mismatch is a genuine bug in
- * the migration this module was handed already-written; fixing the check
- * constraint was not an option because `src/lib/db.types.ts` is frozen for
- * this round and already commits to the literal `'pricing'`, so changing the
- * constraint would only trade a silent failure for a type error. This table
- * is the one place that has to know the exception.
- */
-const SCALAR_PROFILE_COLUMN: Record<
-  'positioning' | 'target_client' | 'brand_voice' | 'pricing',
-  'positioning' | 'target_client' | 'brand_voice' | 'price_point'
-> = {
-  positioning: 'positioning',
-  target_client: 'target_client',
-  brand_voice: 'brand_voice',
-  pricing: 'price_point',
+  price_point: 'summary',
 };
 
 const SEVEN_PS_KEYS = [
@@ -116,11 +97,11 @@ export function buildProfilePatch(
     case 'positioning':
     case 'target_client':
     case 'brand_voice':
-    case 'pricing': {
-      const rollupKey = SCALAR_ROLLUP_FIELD[profileKey];
-      const column = SCALAR_PROFILE_COLUMN[profileKey];
-      const value = toText(answers[rollupKey]).trim() || null;
-      return { [column]: value } as Partial<TablesUpdate<'business_profile'>>;
+    // Each of these keys is spelled exactly like the column it writes, which
+    // is what lets this branch stay a single line rather than a lookup table.
+    case 'price_point': {
+      const value = toText(answers[SCALAR_ROLLUP_FIELD[profileKey]]).trim() || null;
+      return { [profileKey]: value } as Partial<TablesUpdate<'business_profile'>>;
     }
 
     default: {

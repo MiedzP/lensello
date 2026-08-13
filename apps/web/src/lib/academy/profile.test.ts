@@ -95,13 +95,9 @@ describe('buildProfilePatch', () => {
     });
   });
 
-  it('maps the "pricing" profile_key onto the "price_point" column — they are not spelled the same', () => {
-    // academy_worksheets.profile_key allows 'pricing', but business_profile's
-    // column is price_point. Every other profile_key matches its column name
-    // exactly; this is the one exception, and it is a real mismatch in the
-    // migration this module was handed already-written (see profile.ts).
+  it('rolls the price_point worksheet up into the price_point column', () => {
     const fields: WorksheetField[] = [{ key: 'summary', label: 'Summary', type: 'textarea' }];
-    const patch = buildProfilePatch('pricing', fields, { summary: 'Premium, package-based.' });
+    const patch = buildProfilePatch('price_point', fields, { summary: 'Premium, package-based.' });
     expect(patch).toEqual({ price_point: 'Premium, package-based.' });
   });
 

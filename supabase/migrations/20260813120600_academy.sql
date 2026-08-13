@@ -141,7 +141,7 @@ create table public.academy_worksheets (
   profile_key text
                 check (profile_key is null or profile_key in
                   ('swot', 'seven_ps', 'positioning', 'target_client',
-                   'customer_journey', 'brand_voice', 'pricing')),
+                   'customer_journey', 'brand_voice', 'price_point')),
 
   sort_order integer not null default 0,
   created_at timestamptz not null default now()

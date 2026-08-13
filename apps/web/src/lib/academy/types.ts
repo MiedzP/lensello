@@ -36,7 +36,7 @@ export const PROFILE_KEYS: readonly ProfileKey[] = [
   'target_client',
   'customer_journey',
   'brand_voice',
-  'pricing',
+  'price_point',
 ];
 
 /** Parses a worksheet's `schema` jsonb column into typed fields. Anything

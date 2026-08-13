@@ -1832,7 +1832,7 @@ export interface Database {
             | 'target_client'
             | 'customer_journey'
             | 'brand_voice'
-            | 'pricing'
+            | 'price_point'
             | null;
           sort_order: number;
           created_at: string;

@@ -6,23 +6,36 @@
 -- editor. Nothing here is specific to one studio's name, prices, or region,
 -- so the same seed works for any photography business using the platform.
 --
--- NOTE on a mismatch found in 20260813120600_academy.sql, NOT fixed here:
--- `academy_worksheets.profile_key` allows `'pricing'`, but `business_profile`
--- has no `pricing` column — it has `price_point`. Every other allowed value
--- is spelled identically to the business_profile column it rolls up into
--- ('swot' -> swot, 'seven_ps' -> seven_ps, 'positioning' -> positioning,
--- 'target_client' -> target_client, 'customer_journey' -> customer_journey,
--- 'brand_voice' -> brand_voice); only 'pricing' breaks that pattern. Left the
--- check constraint alone because `src/lib/db.types.ts` is frozen for this
--- round and already types `profile_key` as including the literal
--- `'pricing'` — changing the constraint to `'price_point'` would only trade
--- a silent runtime mismatch for a type error every place that literal is
--- used. Handled instead in `src/lib/academy/profile.ts`
--- (`SCALAR_PROFILE_COLUMN`), which maps the worksheet's `'pricing'` key onto
--- the actual `price_point` column explicitly. Flagged in the final report
--- for whoever can update `db.types.ts`.
-
 set lock_timeout = '10s';
+
+-- ---------------------------------------------------------------------------
+-- correction to 20260813120600_academy.sql
+-- ---------------------------------------------------------------------------
+
+-- That migration allowed `profile_key = 'pricing'` while the column it rolls
+-- up into is `business_profile.price_point`. Every other allowed value is
+-- spelled exactly like its target column, so the odd one out was the kind of
+-- near-miss that reads as correct and silently writes nowhere.
+--
+-- Renamed rather than worked around: an enum whose values are "the column
+-- name, except this one" needs a lookup table in every reader, and the next
+-- person to add a worksheet would not know that.
+--
+-- Repeated here rather than only fixed at source because 20260813120600 may
+-- already have been applied. Dropping the constraint first makes this safe to
+-- run either way.
+alter table public.academy_worksheets
+  drop constraint if exists academy_worksheets_profile_key_check;
+
+update public.academy_worksheets
+   set profile_key = 'price_point'
+ where profile_key = 'pricing';
+
+alter table public.academy_worksheets
+  add constraint academy_worksheets_profile_key_check
+  check (profile_key is null or profile_key in
+    ('swot', 'seven_ps', 'positioning', 'target_client',
+     'customer_journey', 'brand_voice', 'price_point'));
 
 -- ---------------------------------------------------------------------------
 -- modules
@@ -211,10 +224,7 @@ values
       {"key": "summary", "label": "Describe your pricing approach in a few sentences", "type": "textarea",
        "help": "This is what shows on the business profile."}
     ]'::jsonb,
-    -- 'pricing', not 'price_point' — matches the check constraint and
-    -- `db.types.ts` as they actually are today. See the note at the top of
-    -- this file: the roll-up code maps this to the `price_point` column.
-    'pricing',
+    'price_point',
     0
   ),
   (
