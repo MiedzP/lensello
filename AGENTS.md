@@ -10,15 +10,28 @@ Before any Next.js work, find and read the relevant doc in `apps/web/node_module
 
 An all-in-one operations platform for Lensello, a photography company. Five modules:
 
-| Module      | Route        | Purpose                                                       |
-| ----------- | ------------ | ------------------------------------------------------------- |
-| Library     | `/library`   | Shoot + photo asset management, selects, tagging              |
-| Campaigns   | `/campaigns` | AI-generated marketing campaigns and social post sets         |
-| Clients     | `/clients`   | Inquiry inbox, AI reply drafting, lightweight CRM             |
-| Gigs        | `/gigs`      | Booking calendar, shoot logistics, deposits                   |
-| Ads         | `/ads`       | Ad creative variants, spend tracking, performance             |
+| Module        | Route            | Purpose                                                      |
+| ------------- | ---------------- | ------------------------------------------------------------ |
+| Library       | `/library`       | Shoot + photo asset management, selects, tagging             |
+| Campaigns     | `/campaigns`     | Campaigns, seasonal playbooks, briefs and checklists         |
+| Calendar      | `/calendar`      | Everything dated: shoots, scheduled posts, campaign tasks    |
+| Conversations | `/conversations` | One inbox across email, DMs, SMS and comments                |
+| Clients       | `/clients`       | Client records, consent, CRM                                 |
+| Studio        | `/studio`        | Plain-English briefs → photo shortlists and generated artwork |
+| Gigs          | `/gigs`          | Booking calendar, shoot logistics, deposits                  |
+| Store         | `/store`         | Print catalogue, orders, lab fulfilment                      |
+| Ads           | `/ads`           | Ad creative variants, spend tracking, performance            |
+| Automations   | `/automations`   | Trigger/step workflows and API keys                          |
+| Academy       | `/academy`       | Marketing training, worksheets, business profile             |
+| Portal        | `/portal`        | Client-facing sign-in, galleries and buying                  |
 
 Single-tenant: one Lensello workspace. Do **not** add org/workspace scoping.
+
+**But keep it sellable.** The platform is intended for photography businesses in
+general, not just this studio. Never hardcode the studio's name, branding,
+prices, or UK-only assumptions into schema, seed content or templates — put them
+in `business_profile`, settings, or the catalogue. Currency is configurable and
+defaults to GBP; do not assume it.
 
 ## Stack
 
@@ -99,3 +112,38 @@ src/lib/library/
 ```
 
 Keep module-private components module-private. Only promote something to `src/components/ui` if two modules genuinely need it — and flag it, because that directory is shared.
+
+## Parallel builds: what is yours and what is frozen
+
+Several agents work this repo at once, each in its own git worktree. The rule
+that makes that merge cleanly is strict ownership.
+
+**Yours**: the one route folder and the one lib folder named in your brief.
+Create whatever you need inside them.
+
+**Frozen — read freely, never edit.** If you need a change here, make it work
+without one and *report the need in your final message*; the integrator
+reconciles all such requests at merge time.
+
+- `src/lib/db.types.ts` — hand-written, and already contains every table for
+  this round of work. `npm run db:types:check` diffs it against the schema.
+- `supabase/migrations/**` — your tables already exist in the migration named in
+  your brief. Need another? Use **only** your pre-assigned follow-up number, so
+  two agents cannot collide on a filename.
+- `src/components/ui/**`, `src/app/globals.css` — the shared kit and design
+  tokens.
+- `src/components/nav.tsx`, `src/app/(app)/layout.tsx` — your nav entry is
+  already there.
+- `src/proxy.ts` — public paths for this round are already listed.
+- `packages/core/src/integrations/**` — the `PrintLab` and `ImageGenerator`
+  interfaces are written and mocked.
+- `AGENTS.md`, `package.json`, `vercel.json`.
+
+Before you report done, run from the repo root and make all three pass:
+
+```
+npm run typecheck && npm run lint && npm run build
+```
+
+Leave your changes **uncommitted** in your worktree. Do not merge, rebase, or
+touch another agent's folders.

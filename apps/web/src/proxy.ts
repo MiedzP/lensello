@@ -33,6 +33,13 @@ const PUBLIC_PATHS = [
   '/c',
   // Where Stripe returns a client after checkout. They have no account.
   '/paid',
+  // The client portal. A client signing in here gets a portal session scoped to
+  // their own record — deliberately not a Supabase session, which would put
+  // them inside the studio's RLS perimeter. It authenticates itself.
+  '/portal',
+  // Public API, authenticated by an API key rather than a cookie. Refusing it
+  // here would bounce every key-holding caller to a login page.
+  '/api/v1',
   // Cron endpoints have no session to refresh and would be bounced to /login.
   // They are not unprotected: each one checks CRON_SECRET itself and refuses
   // to run when it is unset.

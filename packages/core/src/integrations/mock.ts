@@ -17,12 +17,20 @@ import type {
   CalendarClient,
   CalendarEvent,
   CreateAdInput,
+  GeneratedImage,
+  ImageGenerator,
   InboundMessage,
   Integrations,
+  LabOrderItem,
+  LabOrderResult,
+  LabOrderStatus,
+  LabProduct,
+  LabShippingAddress,
   MailClient,
   PaymentClient,
   PaymentRequest,
   PaymentStatus,
+  PrintLab,
   PublishPostInput,
   PublishResult,
   SendMailInput,
@@ -525,6 +533,233 @@ class MockPaymentClient implements PaymentClient {
   }
 }
 
+// --- print lab ----------------------------------------------------------
+
+/**
+ * A plausible UK lab catalogue: standard British print sizes, mounted and
+ * framed options, and an album. Sizes are the imperial ones labs actually list,
+ * converted to millimetres.
+ */
+const MOCK_LAB_CATALOGUE: readonly LabProduct[] = [
+  { labSku: 'PR-6X4', name: '6x4" print', category: 'print', widthMm: 152, heightMm: 102, costCents: 45, currency: 'GBP', minPixels: { width: 1200, height: 800 } },
+  { labSku: 'PR-7X5', name: '7x5" print', category: 'print', widthMm: 178, heightMm: 127, costCents: 70, currency: 'GBP', minPixels: { width: 1400, height: 1000 } },
+  { labSku: 'PR-10X8', name: '10x8" print', category: 'print', widthMm: 254, heightMm: 203, costCents: 180, currency: 'GBP', minPixels: { width: 2000, height: 1600 } },
+  { labSku: 'PR-12X8', name: '12x8" print', category: 'print', widthMm: 305, heightMm: 203, costCents: 240, currency: 'GBP', minPixels: { width: 2400, height: 1600 } },
+  { labSku: 'PR-16X12', name: '16x12" print', category: 'print', widthMm: 406, heightMm: 305, costCents: 520, currency: 'GBP', minPixels: { width: 3200, height: 2400 } },
+  { labSku: 'PR-20X16', name: '20x16" print', category: 'print', widthMm: 508, heightMm: 406, costCents: 890, currency: 'GBP', minPixels: { width: 4000, height: 3200 } },
+  { labSku: 'MT-10X8', name: '10x8" mounted', category: 'framed', widthMm: 254, heightMm: 203, costCents: 640, currency: 'GBP', minPixels: { width: 2000, height: 1600 } },
+  { labSku: 'FR-16X12-OAK', name: '16x12" framed, oak', category: 'framed', widthMm: 406, heightMm: 305, costCents: 3400, currency: 'GBP', minPixels: { width: 3200, height: 2400 } },
+  { labSku: 'FR-20X16-BLK', name: '20x16" framed, black', category: 'framed', widthMm: 508, heightMm: 406, costCents: 4700, currency: 'GBP', minPixels: { width: 4000, height: 3200 } },
+  { labSku: 'CV-24X16', name: '24x16" canvas wrap', category: 'canvas', widthMm: 610, heightMm: 406, costCents: 3900, currency: 'GBP', minPixels: { width: 4800, height: 3200 } },
+  { labSku: 'AL-12X12-30', name: '12x12" album, 30 sides', category: 'album', widthMm: 305, heightMm: 305, costCents: 14500, currency: 'GBP', minPixels: { width: 3000, height: 3000 } },
+];
+
+/** Flat-rate tiers, the way most UK labs actually price carriage. */
+function mockShippingCents(subtotalCents: number): number {
+  if (subtotalCents >= 15000) return 0;
+  if (subtotalCents >= 5000) return 495;
+  return 395;
+}
+
+function csvCell(value: string): string {
+  // Quote unconditionally and double any embedded quote. A postcode is safe;
+  // a client's address line with a comma in it is not.
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+class MockPrintLab implements PrintLab {
+  readonly provider = 'mock-lab';
+
+  /** Orders submitted in this process, so status polling is self-consistent. */
+  private readonly orders = new Map<string, LabOrderResult>();
+  private readonly polls = new Map<string, number>();
+
+  async catalogue(): Promise<LabProduct[]> {
+    await latency();
+    return [...MOCK_LAB_CATALOGUE];
+  }
+
+  private costFor(labSku: string): number {
+    const found = MOCK_LAB_CATALOGUE.find((p) => p.labSku === labSku);
+    if (!found) {
+      throw new IntegrationError(
+        `Unknown lab SKU "${labSku}". Map the product to a SKU the lab publishes before ordering.`,
+        this.provider,
+      );
+    }
+    return found.costCents;
+  }
+
+  async quote(input: {
+    items: readonly LabOrderItem[];
+    shipTo: LabShippingAddress;
+  }): Promise<{ subtotalCents: number; shippingCents: number; currency: string }> {
+    await latency();
+
+    const subtotalCents = input.items.reduce(
+      (sum, item) => sum + this.costFor(item.labSku) * item.quantity,
+      0,
+    );
+
+    return {
+      subtotalCents,
+      // Overseas carriage is a different conversation; the mock refuses to
+      // invent a number rather than quoting one that would be wrong.
+      shippingCents:
+        input.shipTo.country === 'GB' ? mockShippingCents(subtotalCents) : 1650,
+      currency: 'GBP',
+    };
+  }
+
+  async submitOrder(input: {
+    reference: string;
+    items: readonly LabOrderItem[];
+    shipTo: LabShippingAddress;
+  }): Promise<LabOrderResult> {
+    await latency(400);
+
+    if (input.items.length === 0) {
+      throw new IntegrationError('Cannot submit an empty order.', this.provider);
+    }
+
+    const costCents = input.items.reduce(
+      (sum, item) => sum + this.costFor(item.labSku) * item.quantity,
+      0,
+    );
+
+    const result: LabOrderResult = {
+      labOrderRef: mockId('lab', input.reference),
+      status: 'received',
+      trackingUrl: null,
+      costCents,
+    };
+
+    this.orders.set(result.labOrderRef, result);
+    this.polls.set(result.labOrderRef, 0);
+    return result;
+  }
+
+  async orderStatus(labOrderRef: string): Promise<LabOrderResult> {
+    await latency();
+
+    const existing = this.orders.get(labOrderRef);
+    if (!existing) {
+      // Typically a reference from before a restart. Derive a stable status so
+      // re-checking it is at least self-consistent.
+      const statuses: LabOrderStatus[] = ['received', 'in_production', 'shipped', 'delivered'];
+      return {
+        labOrderRef,
+        status: statuses[seed(labOrderRef) % statuses.length]!,
+        trackingUrl: null,
+        costCents: null,
+      };
+    }
+
+    // Walk the order forward one stage per poll, so the fulfilment UI can be
+    // demoed without waiting on a real lab.
+    const seen = (this.polls.get(labOrderRef) ?? 0) + 1;
+    this.polls.set(labOrderRef, seen);
+
+    const stages: LabOrderStatus[] = ['received', 'in_production', 'shipped', 'delivered'];
+    const status = stages[Math.min(seen, stages.length - 1)]!;
+    const advanced: LabOrderResult = {
+      ...existing,
+      status,
+      trackingUrl:
+        status === 'shipped' || status === 'delivered'
+          ? `https://example.invalid/track/${labOrderRef}`
+          : null,
+    };
+
+    this.orders.set(labOrderRef, advanced);
+    return advanced;
+  }
+
+  async exportOrder(input: {
+    reference: string;
+    items: readonly LabOrderItem[];
+    shipTo: LabShippingAddress;
+  }): Promise<{ filename: string; contentType: string; body: string }> {
+    const header = [
+      'reference', 'sku', 'quantity', 'image_url', 'crop',
+      'ship_name', 'ship_line1', 'ship_line2', 'ship_city', 'ship_postcode', 'ship_country',
+    ];
+
+    const rows = input.items.map((item) =>
+      [
+        input.reference,
+        item.labSku,
+        String(item.quantity),
+        item.imageUrl,
+        item.crop ? `${item.crop.x},${item.crop.y},${item.crop.w},${item.crop.h}` : 'full',
+        input.shipTo.name,
+        input.shipTo.line1,
+        input.shipTo.line2 ?? '',
+        input.shipTo.city,
+        input.shipTo.postcode,
+        input.shipTo.country,
+      ].map(csvCell).join(','),
+    );
+
+    return {
+      filename: `lab-order-${input.reference}.csv`,
+      contentType: 'text/csv; charset=utf-8',
+      body: [header.map(csvCell).join(','), ...rows].join('\r\n'),
+    };
+  }
+}
+
+// --- image generation ---------------------------------------------------
+
+const ASPECT_SIZES: Record<string, { width: number; height: number }> = {
+  '1:1': { width: 1024, height: 1024 },
+  '4:5': { width: 1024, height: 1280 },
+  '16:9': { width: 1280, height: 720 },
+  '9:16': { width: 720, height: 1280 },
+};
+
+class MockImageGenerator implements ImageGenerator {
+  readonly provider = 'mock-image';
+
+  async generate(input: {
+    prompt: string;
+    aspectRatio?: '1:1' | '4:5' | '16:9' | '9:16';
+    referenceImageUrl?: string;
+    count?: number;
+  }): Promise<GeneratedImage[]> {
+    await latency(600);
+
+    if (!input.prompt.trim()) {
+      throw new IntegrationError('A prompt is required.', this.provider);
+    }
+
+    const { width, height } = ASPECT_SIZES[input.aspectRatio ?? '1:1']!;
+    const count = Math.min(Math.max(input.count ?? 1, 1), 4);
+
+    return Array.from({ length: count }, (_, i) => {
+      // A flat SVG in the prompt's own deterministic hue. Recognisably a
+      // placeholder — nobody should mistake this for a generated photograph.
+      const hue = seed(`${input.prompt}:${i}`) % 360;
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">` +
+        `<rect width="100%" height="100%" fill="hsl(${hue} 45% 82%)"/>` +
+        `<rect x="6%" y="6%" width="88%" height="88%" fill="none" ` +
+        `stroke="hsl(${hue} 40% 45%)" stroke-width="4" stroke-dasharray="18 12"/>` +
+        `<text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" ` +
+        `font-family="system-ui, sans-serif" font-size="${Math.round(width / 26)}" ` +
+        `fill="hsl(${hue} 35% 30%)">mock image ${i + 1}</text></svg>`;
+
+      return {
+        data: new TextEncoder().encode(svg),
+        contentType: 'image/svg+xml',
+        width,
+        height,
+        model: 'mock-diffusion-1',
+      };
+    });
+  }
+}
+
 // --- registry -----------------------------------------------------------
 
 export function createMockIntegrations(): Integrations {
@@ -535,5 +770,7 @@ export function createMockIntegrations(): Integrations {
     mail: new MockMailClient(),
     calendar: new MockCalendarClient(),
     payments: new MockPaymentClient(),
+    printLab: new MockPrintLab(),
+    imageGen: new MockImageGenerator(),
   };
 }

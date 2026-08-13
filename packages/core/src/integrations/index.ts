@@ -33,8 +33,10 @@ import {
   type CalendarClient,
   type IntegrationMode,
   type Integrations,
+  type ImageGenerator,
   type MailClient,
   type PaymentClient,
+  type PrintLab,
   type SocialGateway,
 } from './types';
 
@@ -138,6 +140,28 @@ export function getIntegrations(): Integrations {
     );
   });
 
+  // No UK lab is integrated yet, so there is no `isPrintLabConfigured()` to
+  // check. In live mode this throws on use rather than quietly falling back to
+  // the mock: an order that reports success without reaching a lab is worse
+  // than one that fails loudly, because nobody goes looking for it. The manual
+  // path is `printLab.exportOrder`, which the mock implements for real.
+  const printLab = lazy<PrintLab>(() => {
+    if (mode === 'mock') return mocks.printLab;
+    throw new NotImplementedError(
+      'print-lab',
+      'print fulfilment. No UK lab adapter is written yet — until one is, ' +
+        'export the order as CSV and send it to the lab by hand',
+    );
+  });
+
+  const imageGen = lazy<ImageGenerator>(() => {
+    if (mode === 'mock') return mocks.imageGen;
+    throw new NotImplementedError(
+      'image-gen',
+      'image generation. Set the provider credentials for the chosen model',
+    );
+  });
+
   cached = {
     mode,
     get social() {
@@ -154,6 +178,12 @@ export function getIntegrations(): Integrations {
     },
     get payments() {
       return payments();
+    },
+    get printLab() {
+      return printLab();
+    },
+    get imageGen() {
+      return imageGen();
     },
   };
 
@@ -174,6 +204,8 @@ export function integrationStatus(): {
   payments: 'live' | 'mock' | 'unavailable';
   ads: 'live' | 'mock' | 'unavailable';
   calendar: 'live' | 'mock' | 'unavailable';
+  printLab: 'live' | 'mock' | 'unavailable';
+  imageGen: 'live' | 'mock' | 'unavailable';
 } {
   const mode = resolveMode();
   const describe = (configured: boolean) =>
@@ -186,6 +218,9 @@ export function integrationStatus(): {
     payments: describe(isStripeConfigured()),
     ads: describe(isMetaAdsConfigured()),
     calendar: describe(isGoogleCalendarConfigured()),
+    // Never `live`: no lab or image provider is integrated yet.
+    printLab: describe(false),
+    imageGen: describe(false),
   };
 }
 

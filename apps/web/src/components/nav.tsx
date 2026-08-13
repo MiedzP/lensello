@@ -3,24 +3,37 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Bot,
+  CalendarDays,
+  GraduationCap,
   Images,
+  Inbox,
   LayoutDashboard,
   Megaphone,
   MessagesSquare,
   Share2,
+  ShoppingBag,
+  Sparkles,
   Target,
   Users,
-  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+// Ordered by how often the studio actually opens them, not by module age:
+// the calendar and the inbox are daily, the academy is occasional.
 const LINKS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { href: '/conversations', label: 'Inbox', icon: Inbox },
   { href: '/library', label: 'Library', icon: Images },
   { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
+  { href: '/studio', label: 'Studio', icon: Sparkles },
   { href: '/clients', label: 'Clients', icon: MessagesSquare },
   { href: '/gigs', label: 'Gigs', icon: CalendarDays },
+  { href: '/store', label: 'Store', icon: ShoppingBag },
   { href: '/ads', label: 'Ads', icon: Target },
+  { href: '/automations', label: 'Automations', icon: Bot },
+  { href: '/academy', label: 'Academy', icon: GraduationCap },
   { href: '/connections', label: 'Connections', icon: Share2 },
   { href: '/staff', label: 'Staff', icon: Users },
 ] as const;

@@ -319,6 +319,134 @@ export interface PaymentClient {
   getPayment(externalId: string): Promise<PaymentRequest>;
 }
 
+// --- print labs ---------------------------------------------------------
+
+/**
+ * A product the lab can actually make, as the lab describes it.
+ *
+ * Deliberately not the same shape as `print_products`: the studio's catalogue
+ * carries retail pricing, ordering and its own SKUs, and must survive changing
+ * labs. `labSku` is the join between the two.
+ */
+export interface LabProduct {
+  labSku: string;
+  name: string;
+  category: string;
+  /** Trim size in millimetres, when the lab publishes one. */
+  widthMm: number | null;
+  heightMm: number | null;
+  /** What the lab charges, minor units of `currency`. */
+  costCents: Cents;
+  currency: string;
+  /** Minimum resolution the lab will accept, if stated. */
+  minPixels: { width: number; height: number } | null;
+}
+
+export interface LabOrderItem {
+  labSku: string;
+  quantity: number;
+  /**
+   * Publicly reachable, full-resolution file. Labs fetch it themselves; none of
+   * them accept a base64 payload at print sizes.
+   */
+  imageUrl: string;
+  /** Normalised 0-1 crop rect. Omit to print the full frame. */
+  crop?: { x: number; y: number; w: number; h: number };
+  reference?: string;
+}
+
+export interface LabShippingAddress {
+  name: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  postcode: string;
+  /** ISO 3166-1 alpha-2. */
+  country: string;
+}
+
+export type LabOrderStatus =
+  | 'received'
+  | 'in_production'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'rejected';
+
+export interface LabOrderResult {
+  /** The lab's reference, stored on `print_orders.lab_order_ref`. */
+  labOrderRef: string;
+  status: LabOrderStatus;
+  trackingUrl: string | null;
+  /** What the lab charged, when it says so at submission time. */
+  costCents: Cents | null;
+}
+
+/**
+ * A print lab.
+ *
+ * No UK lab is wired up yet, so the mock is the only implementation and
+ * `submitOrder` on a live adapter must throw `NotImplementedError` rather than
+ * silently succeeding — an order that reports success without reaching a lab is
+ * worse than one that fails, because nobody chases it.
+ *
+ * `exportOrder` is the reason this can ship before any lab integration exists:
+ * it produces a spec the studio emails to a lab by hand, so prints can be sold
+ * today and fulfilled automatically later without a schema change.
+ */
+export interface PrintLab {
+  readonly provider: string;
+  /** The lab's catalogue, for mapping onto `print_products.lab_sku`. */
+  catalogue(): Promise<LabProduct[]>;
+  /** Price a basket before charging the client. Shipping included. */
+  quote(input: {
+    items: readonly LabOrderItem[];
+    shipTo: LabShippingAddress;
+  }): Promise<{ subtotalCents: Cents; shippingCents: Cents; currency: string }>;
+  submitOrder(input: {
+    reference: string;
+    items: readonly LabOrderItem[];
+    shipTo: LabShippingAddress;
+  }): Promise<LabOrderResult>;
+  orderStatus(labOrderRef: string): Promise<LabOrderResult>;
+  /** Manual-fulfilment fallback: a CSV spec sheet for emailing to a lab. */
+  exportOrder(input: {
+    reference: string;
+    items: readonly LabOrderItem[];
+    shipTo: LabShippingAddress;
+  }): Promise<{ filename: string; contentType: string; body: string }>;
+}
+
+// --- image generation ---------------------------------------------------
+
+export interface GeneratedImage {
+  /** Raw bytes. The caller decides where to store them. */
+  data: Uint8Array;
+  contentType: string;
+  width: number;
+  height: number;
+  model: string;
+}
+
+/**
+ * Text-to-image, for campaign graphics.
+ *
+ * Only ever produces marketing artwork. Nothing from here may be written into
+ * `assets` without an explicit promotion step — a generated image in a client
+ * gallery or a print order is a photograph the studio did not take.
+ */
+export interface ImageGenerator {
+  readonly provider: string;
+  generate(input: {
+    prompt: string;
+    /** Square by default; campaigns also want 4:5 and 9:16. */
+    aspectRatio?: '1:1' | '4:5' | '16:9' | '9:16';
+    /** Reference image for style, where the provider supports it. */
+    referenceImageUrl?: string;
+    count?: number;
+  }): Promise<GeneratedImage[]>;
+}
+
 // --- registry -----------------------------------------------------------
 
 export type IntegrationMode = 'mock' | 'live';
@@ -330,4 +458,6 @@ export interface Integrations {
   readonly mail: MailClient;
   readonly calendar: CalendarClient;
   readonly payments: PaymentClient;
+  readonly printLab: PrintLab;
+  readonly imageGen: ImageGenerator;
 }
