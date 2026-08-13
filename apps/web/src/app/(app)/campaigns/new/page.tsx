@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
 import { isAiConfigured } from '@/lib/ai';
 import { listPlatformLinks } from '@/lib/connections/queries';
+import { listPlaybooks } from '@/lib/planner/queries';
 import { CreateCampaignForm } from '../components/create-campaign-form';
 
 export const metadata: Metadata = { title: 'New campaign' };
@@ -15,7 +16,10 @@ export default async function NewCampaignPage() {
   // Resolved on the server: the client must never see whether a key exists,
   // only whether the button is offered.
   const aiConfigured = isAiConfigured();
-  const links = await listPlatformLinks(supabase);
+  const [links, playbooks] = await Promise.all([
+    listPlatformLinks(supabase),
+    listPlaybooks(supabase),
+  ]);
 
   return (
     <>
@@ -36,7 +40,7 @@ export default async function NewCampaignPage() {
         }
       />
 
-      <CreateCampaignForm aiConfigured={aiConfigured} links={links} />
+      <CreateCampaignForm aiConfigured={aiConfigured} links={links} playbooks={playbooks} />
     </>
   );
 }

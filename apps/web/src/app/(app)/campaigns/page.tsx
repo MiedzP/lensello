@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Megaphone, Plus, Sparkles } from 'lucide-react';
 import {
@@ -18,7 +19,10 @@ import {
 } from '@lensello/core';
 import {
   countCampaignsByStatus,
+  getAssetsByIds,
   listCampaignSummaries,
+  signPhotoUrls,
+  PREVIEW_URL_TTL_SECONDS,
 } from '@/lib/campaigns/queries';
 import {
   CAMPAIGN_STATUS_LABELS,
@@ -26,6 +30,7 @@ import {
   PLATFORM_LABELS,
   formatDateWindow,
 } from '@/lib/campaigns/display';
+import { listPlaybooks } from '@/lib/planner/queries';
 import { LinkButton } from './components/link-button';
 
 export const metadata: Metadata = { title: 'Campaigns' };
@@ -50,12 +55,45 @@ export default async function CampaignsPage(props: PageProps<'/campaigns'>) {
   let summaries: Awaited<ReturnType<typeof listCampaignSummaries>> = [];
   let counts = { total: 0, byStatus: {} as Record<string, number> };
   let loadError: string | null = null;
+  const coverUrls = new Map<string, string>();
+  let playbookEmojis = new Map<string, string>();
 
   try {
     [summaries, counts] = await Promise.all([
       listCampaignSummaries(supabase, active),
       countCampaignsByStatus(supabase),
     ]);
+
+    // Photographers are visual people: a cover thumbnail (or, failing that,
+    // the plan's emoji) makes the list read as a set of campaigns rather
+    // than a table of admin rows.
+    const coverAssetIds = summaries
+      .map(({ campaign }) => campaign.cover_asset_id)
+      .filter((id): id is string => Boolean(id));
+    if (coverAssetIds.length > 0) {
+      const assets = await getAssetsByIds(supabase, coverAssetIds);
+      const signed = await signPhotoUrls(
+        supabase,
+        assets.map((asset) => asset.storage_path),
+        PREVIEW_URL_TTL_SECONDS,
+      );
+      for (const asset of assets) {
+        const url = signed.get(asset.storage_path);
+        if (url) coverUrls.set(asset.id, url);
+      }
+    }
+
+    const playbookIds = summaries
+      .map(({ campaign }) => campaign.playbook_id)
+      .filter((id): id is string => Boolean(id));
+    if (playbookIds.length > 0) {
+      const playbooks = await listPlaybooks(supabase);
+      playbookEmojis = new Map(
+        playbooks
+          .filter((playbook) => playbookIds.includes(playbook.id) && playbook.cover_emoji)
+          .map((playbook) => [playbook.id, playbook.cover_emoji as string]),
+      );
+    }
   } catch {
     loadError = 'Could not load campaigns. Refresh to try again.';
   }
@@ -123,7 +161,20 @@ export default async function CampaignsPage(props: PageProps<'/campaigns'>) {
                   href={`/campaigns/${campaign.id}`}
                   className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-surface-hover sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <CampaignThumbnail
+                      coverUrl={
+                        campaign.cover_asset_id
+                          ? coverUrls.get(campaign.cover_asset_id) ?? null
+                          : null
+                      }
+                      emoji={
+                        campaign.playbook_id
+                          ? playbookEmojis.get(campaign.playbook_id) ?? null
+                          : null
+                      }
+                    />
+                    <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate text-sm font-medium text-foreground">
                         {campaign.name}
@@ -157,6 +208,7 @@ export default async function CampaignsPage(props: PageProps<'/campaigns'>) {
                           .join(' · ')}
                       </p>
                     ) : null}
+                    </div>
                   </div>
 
                   <div className="shrink-0 text-left sm:text-right">
@@ -176,6 +228,25 @@ export default async function CampaignsPage(props: PageProps<'/campaigns'>) {
         </Card>
       ) : null}
     </>
+  );
+}
+
+/** Cover photo if the campaign has one, its plan's emoji if not, otherwise a blank tile. */
+function CampaignThumbnail({
+  coverUrl,
+  emoji,
+}: {
+  coverUrl: string | null;
+  emoji: string | null;
+}) {
+  return (
+    <div className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-subtle bg-surface-raised text-base">
+      {coverUrl ? (
+        <Image src={coverUrl} alt="" fill sizes="40px" className="object-cover" />
+      ) : emoji ? (
+        <span aria-hidden="true">{emoji}</span>
+      ) : null}
+    </div>
   );
 }
 

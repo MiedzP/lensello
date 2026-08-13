@@ -57,10 +57,13 @@ import {
   postStatusChangeSchema,
   reviewPlannedPosts,
   sanitizeCaption,
+  setCampaignCoverSchema,
   updateCampaignSchema,
   updatePostContentSchema,
   uuidSchema,
 } from '@/lib/campaigns/validation';
+import { buildCampaignTaskInserts } from '@/lib/planner/apply';
+import { listPlaybookTasks } from '@/lib/planner/queries';
 
 // --- small helpers ------------------------------------------------------
 
@@ -74,7 +77,6 @@ function textList(formData: FormData, name: string): string[] {
     .getAll(name)
     .filter((value): value is string => typeof value === 'string');
 }
-
 
 function refreshCampaign(campaignId: string): void {
   revalidatePath('/campaigns');
@@ -122,6 +124,9 @@ export async function createCampaign(
     startsOn: text(formData, 'startsOn'),
     endsOn: text(formData, 'endsOn'),
     mode: text(formData, 'mode'),
+    playbookId: text(formData, 'playbookId'),
+    postingDays: textList(formData, 'postingDays'),
+    postingTime: text(formData, 'postingTime'),
   });
 
   if (!parsed.success) return failed(firstIssue(parsed.error));
@@ -196,6 +201,9 @@ export async function createCampaign(
     platforms: input.platforms,
     starts_on: input.startsOn,
     ends_on: input.endsOn,
+    playbook_id: input.playbookId,
+    posting_days: input.postingDays,
+    posting_time: input.postingTime,
   };
 
   const { data: campaign, error } = await supabase
@@ -237,11 +245,36 @@ export async function createCampaign(
     }
   }
 
+  // The dropdown she asked for: picking a playbook populates the checklist —
+  // and with it the calendar — the moment the campaign exists. A failure here
+  // is not fatal to the campaign: it can still be applied by hand from the
+  // detail page, so this only ever adds a note, never rolls back the create.
+  let plannerNote = '';
+  if (input.playbookId && input.startsOn) {
+    const playbookTasks = await listPlaybookTasks(supabase, input.playbookId);
+    if (playbookTasks.length > 0) {
+      const rows = buildCampaignTaskInserts({
+        campaignId: campaign.id,
+        startsOn: input.startsOn,
+        postingDays: input.postingDays,
+        postingTime: input.postingTime,
+        playbookTasks,
+      });
+      const { error: tasksError } = await supabase.from('campaign_tasks').insert(rows);
+      if (tasksError) {
+        plannerNote = '?playbookError=1';
+      }
+    }
+  }
+
   revalidatePath('/campaigns');
+  revalidatePath('/calendar');
   redirect(
     (dropped > 0
       ? `/campaigns/${campaign.id}?dropped=${dropped}`
-      : `/campaigns/${campaign.id}`) as Route,
+      : plannerNote
+        ? `/campaigns/${campaign.id}${plannerNote}`
+        : `/campaigns/${campaign.id}`) as Route,
   );
 }
 
@@ -263,6 +296,8 @@ export async function updateCampaign(
     brief: text(formData, 'brief'),
     startsOn: text(formData, 'startsOn'),
     endsOn: text(formData, 'endsOn'),
+    postingDays: textList(formData, 'postingDays'),
+    postingTime: text(formData, 'postingTime'),
   });
 
   if (!parsed.success) return failed(firstIssue(parsed.error));
@@ -279,6 +314,8 @@ export async function updateCampaign(
       brief: input.brief,
       starts_on: input.startsOn,
       ends_on: input.endsOn,
+      posting_days: input.postingDays,
+      posting_time: input.postingTime,
     })
     .eq('id', input.campaignId);
 
@@ -288,6 +325,47 @@ export async function updateCampaign(
 
   refreshCampaign(input.campaignId);
   return ok('Campaign saved.');
+}
+
+/**
+ * Sets (or clears) the campaign's cover photo.
+ *
+ * "Photographers are visual people" — a campaign in the list and on the
+ * calendar reads as an admin row without one. Drawn from the same library
+ * picker as a post's photos, but this is a single choice, not a carousel.
+ */
+export async function setCampaignCover(
+  _previous: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const { supabase } = await requireUser();
+
+  const parsed = setCampaignCoverSchema.safeParse({
+    campaignId: text(formData, 'campaignId'),
+    assetId: text(formData, 'assetId'),
+  });
+  if (!parsed.success) return failed(firstIssue(parsed.error));
+  const { campaignId, assetId } = parsed.data;
+
+  const campaign = await getCampaign(supabase, campaignId);
+  if (!campaign) return failed('That campaign no longer exists.');
+
+  if (assetId) {
+    const assets = await getAssetsByIds(supabase, [assetId]);
+    if (assets.length === 0) return failed('That photo is no longer in the library.');
+  }
+
+  const { error } = await supabase
+    .from('campaigns')
+    .update({ cover_asset_id: assetId })
+    .eq('id', campaignId);
+
+  if (error) {
+    return failed(friendlyDbError(error.message, 'Could not save the cover photo.'));
+  }
+
+  refreshCampaign(campaignId);
+  return ok(assetId ? 'Cover photo set.' : 'Cover photo removed.');
 }
 
 // --- post content -------------------------------------------------------

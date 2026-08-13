@@ -109,6 +109,24 @@ export async function countCampaignsByStatus(
   return { total: data?.length ?? 0, byStatus };
 }
 
+/** Campaign name lookup for a set of ids, so calendar rows can show one without embedding. */
+export async function mapCampaignsById(
+  db: Db,
+  campaignIds: readonly string[],
+): Promise<Map<string, Pick<Tables<'campaigns'>, 'id' | 'name' | 'status'>>> {
+  const ids = [...new Set(campaignIds)];
+  const map = new Map<string, Pick<Tables<'campaigns'>, 'id' | 'name' | 'status'>>();
+  if (ids.length === 0) return map;
+
+  const { data, error } = await db
+    .from('campaigns')
+    .select('id, name, status')
+    .in('id', ids);
+  if (error) throw new Error(error.message);
+  for (const row of data ?? []) map.set(row.id, row);
+  return map;
+}
+
 export async function getCampaign(
   db: Db,
   campaignId: string,
@@ -132,6 +150,28 @@ export async function listCampaignPosts(
     .eq('campaign_id', campaignId)
     .order('created_at', { ascending: true })
     .order('id', { ascending: true });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Posts touching `[fromIso, toIso]` for the calendar: scheduled to go out in
+ * the window, or already published in it. Draft/approved posts with no
+ * `scheduled_for` have no date and never appear here — that is what the
+ * checklist and the campaign detail page are for.
+ */
+export async function listPostsScheduledBetween(
+  db: Db,
+  fromIso: string,
+  toIso: string,
+): Promise<Tables<'campaign_posts'>[]> {
+  const { data, error } = await db
+    .from('campaign_posts')
+    .select('*')
+    .or(
+      `and(scheduled_for.gte.${fromIso},scheduled_for.lte.${toIso}),and(published_at.gte.${fromIso},published_at.lte.${toIso})`,
+    )
+    .order('scheduled_for', { ascending: true, nullsFirst: false });
   if (error) throw new Error(error.message);
   return data ?? [];
 }
