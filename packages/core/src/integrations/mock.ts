@@ -16,6 +16,7 @@ import type {
   AdMetricRow,
   CalendarClient,
   CalendarEvent,
+  CheckoutInput,
   CreateAdInput,
   GeneratedImage,
   ImageGenerator,
@@ -488,6 +489,20 @@ class MockPaymentClient implements PaymentClient {
   }): Promise<PaymentRequest> {
     await latency(400);
     const externalId = mockId('pay', `${input.gigId}:${input.amountCents}`);
+    const request: PaymentRequest = {
+      externalId,
+      url: `https://example.invalid/checkout/${externalId}`,
+      amountCents: input.amountCents,
+      status: 'pending',
+    };
+    this.requests.set(externalId, request);
+    this.polls.set(externalId, 0);
+    return request;
+  }
+
+  async createCheckout(input: CheckoutInput): Promise<PaymentRequest> {
+    await latency(400);
+    const externalId = mockId('chk', `${input.referenceId}:${input.amountCents}`);
     const request: PaymentRequest = {
       externalId,
       url: `https://example.invalid/checkout/${externalId}`,
