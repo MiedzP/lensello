@@ -1,9 +1,16 @@
-import type { Metadata } from 'next';
+import type { Metadata, Route } from 'next';
 import { cookies, headers } from 'next/headers';
-import { Camera } from 'lucide-react';
+import Link from 'next/link';
+import { Camera, ShoppingBag } from 'lucide-react';
 import { SHOOT_TYPE_LABELS } from '@lensello/core';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { listGalleryPhotos, recordView, resolveGallery } from '@/lib/galleries/queries';
+import {
+  hasActivePrintProducts,
+  listGalleryPhotos,
+  recordView,
+  resolveGallery,
+} from '@/lib/galleries/queries';
+import { listGallerySections } from '@/lib/galleries/sections';
 import { hashVisitor } from '@/lib/galleries/tokens';
 import { unlockCookieName, verifyUnlock } from '@/lib/galleries/unlock';
 import { GalleryGrid, GalleryLock } from './gallery-grid';
@@ -95,7 +102,14 @@ export default async function GalleryPage(props: PageProps<'/g/[token]'>) {
     }
   }
 
-  const photos = await listGalleryPhotos(admin, gallery);
+  const [photos, sections, showShop] = await Promise.all([
+    listGalleryPhotos(admin, gallery),
+    listGallerySections(admin, gallery.id),
+    // A revoked or expired gallery never reaches this point (both return
+    // early above), so the only thing left to check is whether the studio has
+    // anything on sale at all — no point pointing at an empty shop.
+    hasActivePrintProducts(admin),
+  ]);
 
   // Recorded so the studio can see the gallery was opened before chasing.
   // Awaited but non-fatal — `recordView` swallows its own failures.
@@ -104,43 +118,68 @@ export default async function GalleryPage(props: PageProps<'/g/[token]'>) {
   await recordView(admin, gallery.id, ip ? hashVisitor(ip) : null);
 
   return (
-    <Shell>
-      <header className="mb-8 text-center">
-        <Camera size={24} className="mx-auto text-accent" aria-hidden="true" />
-        <h1 className="mt-3 text-xl font-semibold tracking-tight text-foreground">
-          {gallery.title || shoot.title}
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          {SHOOT_TYPE_LABELS[shoot.type]}
-          {shoot.shot_at
-            ? ` · ${new Date(shoot.shot_at).toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}`
-            : ''}
-        </p>
-
-        {gallery.message ? (
-          <p className="mx-auto mt-4 max-w-prose text-sm text-muted">
-            {gallery.message}
+    <>
+      <div className="mx-auto w-full max-w-6xl px-4 pt-10 sm:px-6">
+        <header className="mb-8 text-center">
+          <Camera size={24} className="mx-auto text-accent" aria-hidden="true" />
+          <h1 className="mt-3 text-xl font-semibold tracking-tight text-foreground">
+            {gallery.title || shoot.title}
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            {SHOOT_TYPE_LABELS[shoot.type]}
+            {shoot.shot_at
+              ? ` · ${new Date(shoot.shot_at).toLocaleDateString('en-US', {
+                  month: 'long',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}`
+              : ''}
           </p>
-        ) : null}
-      </header>
+
+          {gallery.message ? (
+            <p className="mx-auto mt-4 max-w-prose text-sm text-muted">
+              {gallery.message}
+            </p>
+          ) : null}
+
+          {showShop ? (
+            // Cast, not a typo: `/g/[token]/shop` is agent B's route, built in
+            // a separate worktree and not present in this one's typegen — the
+            // documented escape hatch for a dynamic target Next cannot see yet.
+            <Link
+              href={`/g/${token}/shop` as Route}
+              className="mt-5 inline-flex items-center gap-1.5 rounded-full border border-accent px-4 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent-subtle"
+            >
+              <ShoppingBag size={13} aria-hidden="true" />
+              Order prints
+            </Link>
+          ) : null}
+        </header>
+      </div>
 
       {photos.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted">
           There are no photographs in this gallery yet.
         </p>
       ) : (
-        <GalleryGrid
-          token={token}
-          photos={photos}
-          approved={approval !== null}
-          allowDownloads={gallery.allow_downloads}
-          watermark={gallery.watermark}
-        />
+        <div className="pb-10">
+          <GalleryGrid
+            token={token}
+            photos={photos}
+            sections={sections}
+            displayStyle={gallery.display_style}
+            accentColor={gallery.accent_color}
+            // No `allow_style_switch` column exists yet (see the report at
+            // merge time) — a client can always try another look at their own
+            // photographs until the studio gets a way to lock that down.
+            allowStyleSwitch
+            approved={approval !== null}
+            allowDownloads={gallery.allow_downloads}
+            watermark={gallery.watermark}
+            showShop={showShop}
+          />
+        </div>
       )}
-    </Shell>
+    </>
   );
 }
