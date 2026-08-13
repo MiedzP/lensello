@@ -16,7 +16,7 @@
 
 import { IntegrationError } from '../types';
 import { currencyCode } from '../../types';
-import type { PaymentClient, PaymentRequest, PaymentStatus } from '../types';
+import type { CheckoutInput, PaymentClient, PaymentRequest, PaymentStatus } from '../types';
 
 const API_BASE = 'https://api.stripe.com/v1';
 
@@ -143,25 +143,69 @@ class StripePaymentClient implements PaymentClient {
     const returnUrl =
       process.env.LENSELLO_PUBLIC_URL?.trim() || 'https://lensello-web-kappa.vercel.app';
 
-    const session = await call<CheckoutSession>('/checkout/sessions', {
-      method: 'POST',
+    return this.createSession({
       // Keyed on the gig and amount, so a double-click or a retried request
       // reuses the same session rather than billing the client twice.
       idempotencyKey: `gig:${input.gigId}:${input.amountCents}`,
+      amountCents: input.amountCents,
+      currency: currencyCode(),
+      description: input.description,
+      customerEmail: input.clientEmail,
+      successUrl: `${returnUrl}/paid?gig=${input.gigId}`,
+      cancelUrl: `${returnUrl}/paid?gig=${input.gigId}&cancelled=1`,
+      // Echoed back on the webhook, which is how a settlement is matched to
+      // a gig without trusting anything in the return URL.
+      metadata: { gigId: input.gigId },
+      clientReferenceId: input.gigId,
+    });
+  }
+
+  /**
+   * Generic checkout for anything that is not a gig deposit/balance — a print
+   * order today. Shares the session-creation path with `requestPayment` so a
+   * fix to one (idempotency, currency, error handling) is not silently absent
+   * from the other.
+   */
+  async createCheckout(input: CheckoutInput): Promise<PaymentRequest> {
+    return this.createSession({
+      idempotencyKey: `checkout:${input.referenceId}:${input.amountCents}`,
+      amountCents: input.amountCents,
+      currency: input.currency,
+      description: input.description,
+      customerEmail: input.customerEmail,
+      successUrl: input.successUrl,
+      cancelUrl: input.cancelUrl,
+      metadata: input.metadata,
+      clientReferenceId: input.referenceId,
+    });
+  }
+
+  private async createSession(input: {
+    idempotencyKey: string;
+    amountCents: number;
+    currency: string;
+    description: string;
+    customerEmail: string | null;
+    successUrl: string;
+    cancelUrl: string;
+    metadata: Record<string, string>;
+    clientReferenceId: string;
+  }): Promise<PaymentRequest> {
+    const session = await call<CheckoutSession>('/checkout/sessions', {
+      method: 'POST',
+      idempotencyKey: input.idempotencyKey,
       body: {
         mode: 'payment',
-        success_url: `${returnUrl}/paid?gig=${input.gigId}`,
-        cancel_url: `${returnUrl}/paid?gig=${input.gigId}&cancelled=1`,
-        ...(input.clientEmail ? { customer_email: input.clientEmail } : {}),
-        // Echoed back on the webhook, which is how a settlement is matched to
-        // a gig without trusting anything in the return URL.
-        metadata: { gigId: input.gigId },
-        client_reference_id: input.gigId,
+        success_url: input.successUrl,
+        cancel_url: input.cancelUrl,
+        ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
+        metadata: input.metadata,
+        client_reference_id: input.clientReferenceId,
         line_items: [
           {
             quantity: 1,
             price_data: {
-              currency: currencyCode().toLowerCase(),
+              currency: input.currency.toLowerCase(),
               unit_amount: input.amountCents,
               product_data: { name: input.description },
             },

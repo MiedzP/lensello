@@ -307,6 +307,26 @@ export interface PaymentRequest {
   status: PaymentStatus;
 }
 
+/**
+ * A checkout not tied to a gig — a print order, or anything else that needs a
+ * hosted payment page without the gig-shaped assumptions `requestPayment`
+ * bakes in (its own success/cancel URLs, its own metadata key).
+ *
+ * `metadata` is echoed back verbatim on settlement. The webhook routes on it
+ * rather than on the return URL, which a browser can reopen, edit, or never
+ * hit at all.
+ */
+export interface CheckoutInput {
+  referenceId: UUID;
+  amountCents: Cents;
+  currency: string;
+  description: string;
+  customerEmail: string | null;
+  successUrl: string;
+  cancelUrl: string;
+  metadata: Record<string, string>;
+}
+
 export interface PaymentClient {
   readonly provider: string;
   /** Deposit or balance request tied to a gig. */
@@ -317,6 +337,8 @@ export interface PaymentClient {
     clientEmail: string | null;
   }): Promise<PaymentRequest>;
   getPayment(externalId: string): Promise<PaymentRequest>;
+  /** Generic hosted checkout for anything that is not a gig deposit/balance. */
+  createCheckout(input: CheckoutInput): Promise<PaymentRequest>;
 }
 
 // --- print labs ---------------------------------------------------------

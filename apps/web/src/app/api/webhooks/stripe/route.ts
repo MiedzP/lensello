@@ -73,16 +73,30 @@ export async function POST(request: Request) {
   }
 
   const session = event.data.object;
-  const gigId = session.metadata?.gigId ?? session.client_reference_id ?? null;
   const sessionId = session.id;
 
-  if (!gigId || !sessionId) {
-    console.error('[stripe] settlement event with no gig reference', event.id);
-    return NextResponse.json({ error: 'No gig reference on the session.' }, { status: 400 });
+  if (!sessionId) {
+    console.error('[stripe] settlement event with no session id', event.id);
+    return NextResponse.json({ error: 'No session id on the event.' }, { status: 400 });
   }
 
   if (session.payment_status !== 'paid') {
     return NextResponse.json({ ignored: 'session completed without payment' });
+  }
+
+  // Print orders are routed on their own metadata key rather than
+  // `client_reference_id` — that field is already the gig branch's, and a
+  // print order and a gig must never be able to collide on the same id space.
+  const printOrderId = session.metadata?.printOrderId ?? null;
+  if (printOrderId) {
+    return settlePrintOrder(printOrderId, sessionId);
+  }
+
+  const gigId = session.metadata?.gigId ?? session.client_reference_id ?? null;
+
+  if (!gigId) {
+    console.error('[stripe] settlement event with no gig reference', event.id);
+    return NextResponse.json({ error: 'No gig reference on the session.' }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -144,4 +158,62 @@ export async function POST(request: Request) {
 
   console.log(`[stripe] recorded ${field} for gig ${gigId}`);
   return NextResponse.json({ recorded: field, gigId });
+}
+
+/**
+ * Settles a print order. [agent B]
+ *
+ * The client-facing return URL (`/g/[token]/shop/paid`) never confirms
+ * payment itself — this is the only place a print order actually becomes
+ * "paid". `.eq('status', 'awaiting_payment')` on the update is the guard
+ * against a Stripe retry double-settling, the same way the gig branch above
+ * guards with `.is(field, null)`.
+ */
+async function settlePrintOrder(printOrderId: string, sessionId: string) {
+  const admin = createAdminClient();
+
+  const { data: order } = await admin
+    .from('print_orders')
+    .select('id, status, stripe_payment_intent_id')
+    .eq('id', printOrderId)
+    .maybeSingle();
+
+  if (!order) {
+    console.error(`[stripe] paid session ${sessionId} references missing print order ${printOrderId}`);
+    return NextResponse.json({ ignored: 'print order no longer exists' });
+  }
+
+  if (order.stripe_payment_intent_id !== sessionId) {
+    console.error(`[stripe] paid session ${sessionId} does not match print order ${printOrderId}'s recorded session`);
+    return NextResponse.json({ ignored: 'session does not match the recorded checkout' });
+  }
+
+  if (order.status === 'paid') {
+    return NextResponse.json({ ignored: 'already settled' });
+  }
+
+  const paidAt = new Date().toISOString();
+
+  const { error } = await admin
+    .from('print_orders')
+    .update({ status: 'paid', paid_at: paidAt })
+    .eq('id', printOrderId)
+    .eq('status', 'awaiting_payment');
+
+  if (error) {
+    console.error('[stripe] could not record print order settlement', error);
+    return NextResponse.json({ error: 'Could not record the payment.' }, { status: 500 });
+  }
+
+  await admin.from('print_order_events').insert({
+    order_id: printOrderId,
+    kind: 'paid',
+    detail: sessionId,
+  });
+
+  revalidatePath('/store');
+  revalidatePath(`/store/orders/${printOrderId}`);
+
+  console.log(`[stripe] recorded payment for print order ${printOrderId}`);
+  return NextResponse.json({ recorded: 'paid', printOrderId });
 }
