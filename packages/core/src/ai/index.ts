@@ -250,3 +250,103 @@ export function buildAltTextPrompt(): Prompt {
     user: 'Describe this photograph.',
   };
 }
+
+// --- studio: interpreting a plain-English brief -------------------------
+
+/**
+ * Turns a photographer's free-text request ("a post about the groom's
+ * speech") into the structured search the studio module runs against
+ * `asset_ai_labels` and `assets.tags`.
+ *
+ * There is no vision model wired into `generateJson` — this reasons about the
+ * *words* of the brief only, same as the heuristic fallback the studio module
+ * uses when no key is configured. It is a better parser than the heuristic,
+ * not a different kind of input.
+ */
+export function buildStudioInterpretPrompt(input: {
+  prompt: string;
+  knownShootTypes: readonly ShootType[];
+}): Prompt {
+  const { prompt, knownShootTypes } = input;
+
+  return {
+    system: `You turn a photography studio's plain-English request into a structured
+photo search over an existing library. The library is indexed by short,
+lowercase, single-concept labels (e.g. "speech", "confetti", "first dance",
+"beach"), not by sentences — so break the request into the concrete concepts
+someone would tag a photo with, not a restatement of the sentence.
+
+Shoot types in this studio's library: ${knownShootTypes.join(', ') || 'unknown'}.
+
+Return JSON matching exactly:
+{"summary": string, "labels": string[], "shootType": string | null, "count": number, "notes": string | null}
+
+- "summary" restates the request in one short sentence, for the photographer to confirm.
+- "labels": 2-8 lowercase, single-concept search terms. Split compound ideas
+  ("groom's speech") into their parts ("speech", "groom"). No sentences, no
+  hashtags, no duplicates.
+- "shootType": one of the known shoot types above if the request implies one, else null.
+- "count": how many photos were asked for. Read a number if one was stated
+  ("10 photos"); otherwise use a sensible default for a single social post (10).
+- "notes": anything else worth carrying forward (a mood, an exclusion), or null.
+
+No commentary outside the JSON.`,
+    user: `The photographer typed: "${prompt}"\n\nInterpret it.`,
+  };
+}
+
+// --- studio: captioning a photograph from what is already known ---------
+
+/**
+ * Describes a photograph without looking at it.
+ *
+ * `generateJson` sends text only — nothing here attaches image bytes to the
+ * request. So this grounds the model in metadata that already exists (the
+ * filename, the photographer's own tags, any existing alt text, the shoot it
+ * belongs to) and asks it to describe *that*, explicitly forbidding it from
+ * inventing visual detail no one gave it. That is a real limitation: it
+ * produces a better-written summary of known facts, not a new observation
+ * about the image. True vision captioning needs `generateJson` (or a
+ * dedicated path) to carry image content, which does not exist yet.
+ */
+export function buildAssetAnalysisPrompt(input: {
+  filename: string;
+  existingTags: readonly string[];
+  existingAltText: string | null;
+  shootType: ShootType | null;
+  shootTitle: string | null;
+}): Prompt {
+  const { filename, existingTags, existingAltText, shootType, shootTitle } = input;
+
+  const known = [
+    `Filename: ${filename}`,
+    shootTitle ? `Shoot: ${shootTitle}` : null,
+    shootType ? `Shoot type: ${SHOOT_TYPE_LABELS[shootType]}` : null,
+    existingTags.length > 0 ? `Photographer's tags: ${existingTags.join(', ')}` : null,
+    existingAltText ? `Existing description: ${existingAltText}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  return {
+    system: `You index photographs for a photography studio's library so staff can find
+them later by describing what they want in plain English.
+
+You are NOT shown the photograph. Work only from the facts given below — do
+not invent a subject, setting, or moment that is not implied by them. If the
+facts are thin, write a short, honest, generic caption and propose fewer, more
+cautious labels rather than guessing specifics.
+
+Return JSON matching exactly:
+{"caption": string, "labels": [{"label": string, "kind": string, "confidence": number}]}
+
+- "caption": one factual sentence, under 140 characters.
+- "labels": 1-6 lowercase, single-concept tags. "kind" is one of: subject,
+  scene, moment, emotion, object, colour, people. "confidence" is 0-1, and
+  should be lower (under 0.5) when a label is inferred rather than stated in
+  the facts.
+
+No commentary outside the JSON.`,
+    user: `${known || 'No metadata is available for this photograph.'}\n\nDescribe it.`,
+  };
+}
