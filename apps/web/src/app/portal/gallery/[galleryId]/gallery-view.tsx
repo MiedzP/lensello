@@ -1,48 +1,42 @@
 'use client';
 
+/**
+ * The portal's gallery viewer. A near-twin of `/g/[token]`'s `GalleryGrid` —
+ * same favouriting, approval and style-switching behaviour — but every form
+ * carries a `galleryId` instead of a token, and downloads are routed through
+ * this route's own download endpoint rather than the token-gated one.
+ */
+
 import { useActionState, useMemo, useOptimistic, useState, useTransition } from 'react';
-import { Heart, ShoppingBag } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { Button, ErrorNote, Input } from '@/components/ui';
 import type { DisplayStyle, GalleryPhoto } from '@/lib/galleries/queries';
 import { buildDisplaySections, type GallerySectionWithAssets } from '@/lib/galleries/sections';
-import { GalleryDisplay } from './styles';
-import { isImmersiveStyle, StyleSwitcher } from './styles/style-switcher';
-import { approveSelection, toggleFavourite, unlockGallery } from './actions';
-import { GALLERY_IDLE } from './gallery-state';
+import { GalleryDisplay } from '@/app/g/[token]/styles';
+import { isImmersiveStyle, StyleSwitcher } from '@/app/g/[token]/styles/style-switcher';
+import { approveSelectionPortal, toggleFavouritePortal } from './actions';
+import { PORTAL_GALLERY_IDLE } from './gallery-state';
 
-/**
- * Favouriting is optimistic.
- *
- * A heart that waits for a server round trip before filling in feels broken
- * when you are working through two hundred photographs, and that is exactly
- * the moment this screen has to feel good — it is the client's only experience
- * of the studio's software.
- */
-export function GalleryGrid({
-  token,
+export function PortalGalleryView({
+  galleryId,
   photos,
   sections,
   displayStyle,
   accentColor,
-  allowStyleSwitch,
   approved,
   allowDownloads,
   watermark,
-  showShop,
 }: {
-  token: string;
+  galleryId: string;
   photos: GalleryPhoto[];
   sections: GallerySectionWithAssets[];
   displayStyle: DisplayStyle;
   accentColor: string | null;
-  allowStyleSwitch: boolean;
   approved: boolean;
   allowDownloads: boolean;
   watermark: boolean;
-  /** Whether the studio has anything for sale — hides the per-photo "order" link when it doesn't. */
-  showShop: boolean;
 }) {
-  const [favouriteState, favouriteAction] = useActionState(toggleFavourite, GALLERY_IDLE);
+  const [favouriteState, favouriteAction] = useActionState(toggleFavouritePortal, PORTAL_GALLERY_IDLE);
   const [, startTransition] = useTransition();
   const [style, setStyle] = useState<DisplayStyle>(displayStyle);
 
@@ -64,11 +58,8 @@ export function GalleryGrid({
   const renderOverlay = (photo: GalleryPhoto) => (
     <div className="flex items-center gap-1.5">
       {approved ? null : (
-        <form
-          action={favouriteAction}
-          onSubmit={() => startTransition(() => setOptimistic(photo.id))}
-        >
-          <input type="hidden" name="token" value={token} />
+        <form action={favouriteAction} onSubmit={() => startTransition(() => setOptimistic(photo.id))}>
+          <input type="hidden" name="galleryId" value={galleryId} />
           <input type="hidden" name="assetId" value={photo.id} />
           <button
             type="submit"
@@ -86,47 +77,22 @@ export function GalleryGrid({
       )}
 
       {allowDownloads ? (
-        // Routed through our own origin rather than linking the signed Supabase
-        // URL directly: the `download` attribute is ignored cross-origin, so
-        // that version opened the photograph in a tab instead of saving it.
         <a
-          href={`/g/${token}/download/${photo.id}`}
+          href={`/portal/gallery/${galleryId}/download/${photo.id}`}
           className="rounded-md bg-black/45 px-2 py-1 text-xs text-white backdrop-blur transition-colors hover:bg-black/65"
         >
           Download
         </a>
       ) : null}
-
-      {showShop ? (
-        // `asset` is a hint, not a contract with the shop route — a client
-        // landing on it without one still sees the whole catalogue, so an
-        // unrecognised or ignored param costs nothing.
-        <a
-          href={`/g/${token}/shop?asset=${photo.id}`}
-          title="Order a print of this photograph"
-          className="rounded-full bg-black/45 p-2 text-white backdrop-blur transition-colors hover:bg-black/65"
-        >
-          <ShoppingBag size={16} aria-hidden="true" />
-          <span className="sr-only">Order a print of {photo.filename}</span>
-        </a>
-      ) : null}
     </div>
   );
 
-  // `fine_art` and `story` want the full width of the viewport to breathe in;
-  // the three denser styles read better held to the page's usual measure. This
-  // has to live here rather than in the server-rendered page shell, because a
-  // client switching styles has to get the width that goes with the new one
-  // immediately, not the one the gallery originally loaded with.
   const immersive = isImmersiveStyle(style);
 
   return (
     <div className={immersive ? 'w-full' : 'mx-auto w-full max-w-6xl px-4 sm:px-6'}>
-      {allowStyleSwitch ? <StyleSwitcher style={style} onChange={setStyle} /> : null}
+      <StyleSwitcher style={style} onChange={setStyle} />
 
-      {/* Without this the optimistic heart simply flips back when the server
-          refuses — a client whose selection is locked would tap repeatedly and
-          be told nothing. */}
       {favouriteState.error ? (
         <div className="mb-4">
           <ErrorNote>{favouriteState.error}</ErrorNote>
@@ -143,22 +109,22 @@ export function GalleryGrid({
       />
 
       <div className={immersive ? 'mx-auto w-full max-w-2xl px-4 sm:px-6' : undefined}>
-        <ApprovalBar token={token} chosen={chosen.length} approved={approved} />
+        <ApprovalBar galleryId={galleryId} chosen={chosen.length} approved={approved} />
       </div>
     </div>
   );
 }
 
 function ApprovalBar({
-  token,
+  galleryId,
   chosen,
   approved,
 }: {
-  token: string;
+  galleryId: string;
   chosen: number;
   approved: boolean;
 }) {
-  const [state, action, pending] = useActionState(approveSelection, GALLERY_IDLE);
+  const [state, action, pending] = useActionState(approveSelectionPortal, PORTAL_GALLERY_IDLE);
 
   if (approved) {
     return (
@@ -188,7 +154,7 @@ function ApprovalBar({
 
       {chosen > 0 ? (
         <form action={action} className="mt-3 space-y-3">
-          <input type="hidden" name="token" value={token} />
+          <input type="hidden" name="galleryId" value={galleryId} />
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Input name="approvedName" placeholder="Your name" autoComplete="name" />
@@ -209,41 +175,6 @@ function ApprovalBar({
           happy with the set.
         </p>
       )}
-    </div>
-  );
-}
-
-/** Password gate, shown before anything else when a gallery has one. */
-export function GalleryLock({ token, title }: { token: string; title: string }) {
-  const [state, action, pending] = useActionState(unlockGallery, GALLERY_IDLE);
-
-  return (
-    <div className="mx-auto max-w-sm px-6 py-16">
-      <h1 className="text-center text-lg font-semibold tracking-tight text-foreground">
-        {title || 'Private gallery'}
-      </h1>
-      <p className="mt-2 text-center text-sm text-muted">
-        Enter the password your photographer gave you.
-      </p>
-
-      <form action={action} className="mt-6 space-y-3">
-        <input type="hidden" name="token" value={token} />
-
-        {state.error ? <ErrorNote>{state.error}</ErrorNote> : null}
-
-        <Input
-          name="password"
-          type="password"
-          autoComplete="off"
-          aria-label="Gallery password"
-          required
-          autoFocus
-        />
-
-        <Button type="submit" variant="primary" className="w-full" disabled={pending}>
-          {pending ? 'Checking…' : 'Open gallery'}
-        </Button>
-      </form>
     </div>
   );
 }
