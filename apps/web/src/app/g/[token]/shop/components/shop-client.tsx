@@ -16,6 +16,7 @@ import { Basket } from './basket';
 export function ShopClient({
   token,
   photos,
+  initialAssetId,
   products,
   minPixelsByProductId,
   initialCartItems,
@@ -26,9 +27,13 @@ export function ShopClient({
   products: ShopProduct[];
   minPixelsByProductId: Record<string, { width: number; height: number }>;
   initialCartItems: ShopCartItem[];
+  initialAssetId: string | null;
   currency: string;
 }) {
-  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  // Preselected when the client arrived from a specific photograph in the
+  // gallery, so "order this print" lands on that frame rather than dropping
+  // them back at the picker to find it again.
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(initialAssetId);
   const selectedPhoto = photos.find((photo) => photo.id === selectedAssetId) ?? null;
 
   return (

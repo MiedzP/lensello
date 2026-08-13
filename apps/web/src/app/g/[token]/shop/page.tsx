@@ -50,6 +50,7 @@ function NotAvailable({ title, body }: { title: string; body: string }) {
 
 export default async function ShopPage(props: PageProps<'/g/[token]/shop'>) {
   const { token } = await props.params;
+  const { asset } = await props.searchParams;
 
   const admin = createAdminClient();
   const resolved = await resolveGallery(admin, token);
@@ -137,6 +138,12 @@ export default async function ShopPage(props: PageProps<'/g/[token]/shop'>) {
         <ShopClient
           token={token}
           photos={photos}
+          // Checked against this gallery's own photos rather than trusted:
+          // the id arrives in the URL, and a stale or forged one must fall
+          // back to the picker, not preselect something from another gallery.
+          initialAssetId={
+            typeof asset === 'string' && photoByAssetId.has(asset) ? asset : null
+          }
           products={products}
           minPixelsByProductId={minPixelsByProductId}
           initialCartItems={cartItems}

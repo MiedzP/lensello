@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Bot,
   CalendarDays,
+  GalleryVerticalEnd,
   GraduationCap,
   Images,
   Inbox,
@@ -26,6 +27,7 @@ const LINKS = [
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/conversations', label: 'Inbox', icon: Inbox },
   { href: '/library', label: 'Library', icon: Images },
+  { href: '/galleries', label: 'Galleries', icon: GalleryVerticalEnd },
   { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
   { href: '/studio', label: 'Studio', icon: Sparkles },
   { href: '/clients', label: 'Clients', icon: MessagesSquare },
