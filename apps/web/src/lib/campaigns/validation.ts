@@ -19,6 +19,7 @@ import {
   type PostStatus,
   type SocialPlatform,
 } from '@lensello/core';
+import { sanitizePostingDays } from '@/lib/planner/dates';
 
 /** Instagram's cap, and the tightest of the four platforms. Mirrors the CHECK. */
 export const MAX_CAPTION_LENGTH = 2200;
@@ -67,6 +68,43 @@ export const postStatusSchema = z.enum(POST_STATUSES);
 export const platformSchema = z.enum(SOCIAL_PLATFORMS);
 export const uuidSchema = z.uuid('That is not a valid id.');
 
+/** '' -> null; a real value must still be a UUID. Used for the optional playbook picker. */
+const optionalUuid = z
+  .string()
+  .transform((value) => value.trim())
+  .refine((value) => value === '' || z.uuid().safeParse(value).success, {
+    message: 'That could not be identified.',
+  })
+  .transform((value) => (value === '' ? null : value));
+
+/**
+ * Multi-checkbox weekday values -> a sanitized, de-duplicated `posting_days`
+ * array. At least one day is required: this is the control the client asked
+ * for ("more control over what populates the calendar"), and a campaign with
+ * zero posting days would mean every generated post silently loses its date.
+ */
+const postingDaysList = z
+  .array(z.string())
+  .transform((values) =>
+    sanitizePostingDays(
+      values.map((value) => Number(value)).filter((value) => !Number.isNaN(value)),
+    ),
+  )
+  .refine((days) => days.length > 0, {
+    message: 'Pick at least one day this campaign posts on.',
+  });
+
+const postingTime = z
+  .string()
+  .transform((value) => value.trim())
+  .refine((value) => value === '' || /^\d{2}:\d{2}(:\d{2})?$/.test(value), {
+    message: 'Pick a valid time of day.',
+  })
+  .transform((value) => {
+    if (value === '') return '10:00:00';
+    return value.length === 5 ? `${value}:00` : value;
+  });
+
 // --- campaign creation --------------------------------------------------
 
 export const createCampaignSchema = z
@@ -86,6 +124,10 @@ export const createCampaignSchema = z
     endsOn: optionalDate,
     /** The client asks; `isAiConfigured()` decides. */
     mode: z.enum(['generate', 'manual']).catch('manual'),
+    /** The dropdown: a seeded plan whose audience/brief/tasks this campaign starts from. */
+    playbookId: optionalUuid,
+    postingDays: postingDaysList,
+    postingTime,
   })
   .refine(
     (value) =>
@@ -93,7 +135,11 @@ export const createCampaignSchema = z
       value.endsOn === null ||
       value.endsOn >= value.startsOn,
     { message: 'The end date cannot be before the start date.', path: ['endsOn'] },
-  );
+  )
+  .refine((value) => value.playbookId === null || value.startsOn !== null, {
+    message: 'Set a start date so the plan’s tasks have something to count from.',
+    path: ['startsOn'],
+  });
 
 export type CreateCampaignInput = z.infer<typeof createCampaignSchema>;
 
@@ -116,6 +162,8 @@ export const updateCampaignSchema = z
     brief: optionalText(2000),
     startsOn: optionalDate,
     endsOn: optionalDate,
+    postingDays: postingDaysList,
+    postingTime,
   })
   .refine(
     (value) =>
@@ -124,6 +172,11 @@ export const updateCampaignSchema = z
       value.endsOn >= value.startsOn,
     { message: 'The end date cannot be before the start date.', path: ['endsOn'] },
   );
+
+export const setCampaignCoverSchema = z.object({
+  campaignId: uuidSchema,
+  assetId: optionalUuid,
+});
 
 // --- posts --------------------------------------------------------------
 

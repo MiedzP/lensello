@@ -22,6 +22,7 @@ import {
 import { IDLE } from '@/lib/campaigns/action-state';
 import { CAMPAIGN_STATUS_LABELS, PLATFORM_LABELS } from '@/lib/campaigns/display';
 import { linkNote, type PlatformLinks } from '@/lib/connections/links';
+import { WEEKDAY_OPTIONS, toTimeInputValue } from '@/lib/planner/display';
 import { updateCampaign } from '../actions';
 
 export interface CampaignSettings {
@@ -34,6 +35,8 @@ export interface CampaignSettings {
   platforms: string[];
   startsOn: string | null;
   endsOn: string | null;
+  postingDays: number[];
+  postingTime: string;
 }
 
 export function CampaignSettingsForm({
@@ -175,6 +178,44 @@ export function CampaignSettingsForm({
               defaultValue={campaign.brief ?? ''}
             />
           </Field>
+
+          <fieldset>
+            <legend className="block text-sm font-medium text-foreground">
+              Posting schedule
+            </legend>
+            <p className="mt-1 text-xs text-muted">
+              Which days this campaign posts on, and the time of day. Generated
+              post tasks land on these days.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {WEEKDAY_OPTIONS.map((day) => (
+                <label
+                  key={day.value}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-strong bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
+                >
+                  <input
+                    type="checkbox"
+                    name="postingDays"
+                    value={day.value}
+                    defaultChecked={campaign.postingDays.includes(day.value)}
+                    className="size-3.5 accent-accent"
+                  />
+                  <span aria-hidden="true">{day.short}</span>
+                  <span className="sr-only">{day.long}</span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 max-w-[10rem]">
+              <Field label="Posting time" htmlFor="campaign-posting-time">
+                <Input
+                  id="campaign-posting-time"
+                  name="postingTime"
+                  type="time"
+                  defaultValue={toTimeInputValue(campaign.postingTime)}
+                />
+              </Field>
+            </div>
+          </fieldset>
         </CardBody>
 
         <CardFooter>

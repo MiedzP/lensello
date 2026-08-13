@@ -1,9 +1,10 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Loader2, Sparkles } from 'lucide-react';
 import {
+  Badge,
   Button,
   Card,
   CardBody,
@@ -23,6 +24,9 @@ import { IDLE } from '@/lib/campaigns/action-state';
 import { MAX_POST_COUNT, MIN_POST_COUNT } from '@/lib/campaigns/validation';
 import { PLATFORM_LABELS } from '@/lib/campaigns/display';
 import { linkNote, type PlatformLinks } from '@/lib/connections/links';
+import type { CampaignPlaybookRow } from '@/lib/planner/types';
+import { SEASON_LABELS, WEEKDAY_OPTIONS, sortSeasons } from '@/lib/planner/display';
+import { sanitizePostingDays } from '@/lib/planner/dates';
 import { createCampaign } from '../actions';
 
 const POST_COUNTS = Array.from(
@@ -30,12 +34,16 @@ const POST_COUNTS = Array.from(
   (_, index) => MIN_POST_COUNT + index,
 );
 
+const NO_PLAYBOOK = '';
+
 export function CreateCampaignForm({
   aiConfigured,
   links,
+  playbooks,
 }: {
   aiConfigured: boolean;
   links: PlatformLinks;
+  playbooks: CampaignPlaybookRow[];
 }) {
   const [state, action, pending] = useActionState(createCampaign, IDLE);
   const firstPublishable = SOCIAL_PLATFORMS.find(
@@ -45,6 +53,55 @@ export function CreateCampaignForm({
   const [mode, setMode] = useState<'generate' | 'manual'>(
     aiConfigured ? 'generate' : 'manual',
   );
+
+  const playbooksById = useMemo(
+    () => new Map(playbooks.map((playbook) => [playbook.id, playbook])),
+    [playbooks],
+  );
+  const seasons = useMemo(
+    () => sortSeasons([...new Set(playbooks.map((p) => p.season))]),
+    [playbooks],
+  );
+
+  const [playbookId, setPlaybookId] = useState(NO_PLAYBOOK);
+  const [audience, setAudience] = useState('');
+  const [brief, setBrief] = useState('');
+  const [postingDays, setPostingDays] = useState<number[]>([1, 3, 5]);
+  const [postingTime, setPostingTime] = useState('10:00');
+
+  const selectedPlaybook = playbookId ? playbooksById.get(playbookId) ?? null : null;
+
+  /**
+   * Picking a plan fills in audience, brief, posting days and time — the
+   * "thought process and workflow" she asked for. A field is only overwritten
+   * if it still matches what the *previous* plan put there (or was untouched
+   * to begin with): once someone edits a field by hand, switching plans
+   * leaves their words alone.
+   */
+  function handlePlaybookChange(nextId: string) {
+    const previous = playbookId ? playbooksById.get(playbookId) ?? null : null;
+    const next = nextId ? playbooksById.get(nextId) ?? null : null;
+    setPlaybookId(nextId);
+    if (!next) return;
+
+    setAudience((current) =>
+      current === '' || current === (previous?.audience_template ?? '')
+        ? next.audience_template ?? ''
+        : current,
+    );
+    setBrief((current) =>
+      current === '' || current === (previous?.brief_template ?? '')
+        ? next.brief_template ?? ''
+        : current,
+    );
+    setPostingDays((current) => {
+      const previousDefault = previous ? sanitizePostingDays(previous.posting_days) : [1, 3, 5];
+      const unchanged =
+        current.length === previousDefault.length &&
+        current.every((day) => previousDefault.includes(day));
+      return unchanged ? sanitizePostingDays(next.posting_days) : current;
+    });
+  }
 
   const generating = pending && mode === 'generate';
 
@@ -72,13 +129,52 @@ export function CreateCampaignForm({
 
       <Card>
         <CardBody className="space-y-4">
+          {playbooks.length > 0 ? (
+            <Field
+              label="Start from a plan"
+              htmlFor="playbookId"
+              hint="Fills in the audience, the brief, and a dated checklist below — every field stays editable."
+            >
+              <Select
+                id="playbookId"
+                name="playbookId"
+                value={playbookId}
+                onChange={(event) => handlePlaybookChange(event.target.value)}
+              >
+                <option value={NO_PLAYBOOK}>No plan — start from scratch</option>
+                {seasons.map((season) => (
+                  <optgroup key={season} label={SEASON_LABELS[season]}>
+                    {playbooks
+                      .filter((playbook) => playbook.season === season)
+                      .map((playbook) => (
+                        <option key={playbook.id} value={playbook.id}>
+                          {playbook.cover_emoji ? `${playbook.cover_emoji} ` : ''}
+                          {playbook.name}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+              </Select>
+              {selectedPlaybook?.summary ? (
+                <p className="mt-2 rounded-md border border-subtle bg-surface-raised px-3 py-2 text-xs text-muted">
+                  {selectedPlaybook.summary}
+                </p>
+              ) : null}
+            </Field>
+          ) : null}
+
           <Field
             label="Goal"
             htmlFor="objective"
             hint="What this campaign is for. It shapes every caption."
             required
           >
-            <Select id="objective" name="objective" defaultValue="book_more_shoots">
+            <Select
+              id="objective"
+              name="objective"
+              defaultValue={selectedPlaybook?.objective ?? 'book_more_shoots'}
+              key={selectedPlaybook?.objective ?? 'book_more_shoots'}
+            >
               {CAMPAIGN_OBJECTIVES.map((objective) => (
                 <option key={objective} value={objective}>
                   {CAMPAIGN_OBJECTIVE_LABELS[objective]}
@@ -106,10 +202,15 @@ export function CreateCampaignForm({
                       type="checkbox"
                       name="platforms"
                       value={platform}
-                      // Default to what can actually be published to, rather
+                      // A plan's own platforms win when one is picked. Otherwise
+                      // default to what can actually be published to, rather
                       // than always Instagram — pre-ticking a platform with no
                       // linked account builds a campaign that cannot ship.
-                      defaultChecked={link.canPublish && platform === firstPublishable}
+                      defaultChecked={
+                        selectedPlaybook
+                          ? selectedPlaybook.platforms.includes(platform)
+                          : link.canPublish && platform === firstPublishable
+                      }
                       className="size-4 accent-accent"
                     />
                     <span>
@@ -146,10 +247,13 @@ export function CreateCampaignForm({
             htmlFor="audience"
             hint="Who this is aimed at, e.g. “engaged couples in Boston, 25-34”."
           >
-            <Input
+            <Textarea
               id="audience"
               name="audience"
               maxLength={500}
+              rows={2}
+              value={audience}
+              onChange={(event) => setAudience(event.target.value)}
               placeholder="Engaged couples planning a 2027 wedding"
             />
           </Field>
@@ -164,6 +268,8 @@ export function CreateCampaignForm({
               name="brief"
               maxLength={2000}
               rows={5}
+              value={brief}
+              onChange={(event) => setBrief(event.target.value)}
               placeholder="Three barn weddings shot this autumn. I want to fill two open Saturdays in March and lead with the golden-hour portraits from the Willowmere set."
             />
           </Field>
@@ -200,14 +306,68 @@ export function CreateCampaignForm({
               </Select>
             </Field>
 
-            <Field label="Starts" htmlFor="startsOn">
-              <Input id="startsOn" name="startsOn" type="date" />
+            <Field
+              label="Starts"
+              htmlFor="startsOn"
+              hint={playbookId ? 'Required — the plan’s tasks are dated from this.' : undefined}
+              required={Boolean(playbookId)}
+            >
+              <Input id="startsOn" name="startsOn" type="date" required={Boolean(playbookId)} />
             </Field>
 
             <Field label="Ends" htmlFor="endsOn">
               <Input id="endsOn" name="endsOn" type="date" />
             </Field>
           </div>
+
+          <fieldset>
+            <legend className="block text-sm font-medium text-foreground">
+              Posting schedule
+            </legend>
+            <p className="mt-1 text-xs text-muted">
+              Which days this campaign posts on, and the time of day. Generated
+              post tasks land on these days.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {WEEKDAY_OPTIONS.map((day) => {
+                const checked = postingDays.includes(day.value);
+                return (
+                  <label
+                    key={day.value}
+                    className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-strong bg-surface px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
+                  >
+                    <input
+                      type="checkbox"
+                      name="postingDays"
+                      value={day.value}
+                      checked={checked}
+                      onChange={(event) =>
+                        setPostingDays((current) =>
+                          event.target.checked
+                            ? sanitizePostingDays([...current, day.value])
+                            : current.filter((value) => value !== day.value),
+                        )
+                      }
+                      className="size-3.5 accent-accent"
+                    />
+                    <span aria-hidden="true">{day.short}</span>
+                    <span className="sr-only">{day.long}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-3 max-w-[10rem]">
+              <Field label="Posting time" htmlFor="postingTime">
+                <Input
+                  id="postingTime"
+                  name="postingTime"
+                  type="time"
+                  value={postingTime}
+                  onChange={(event) => setPostingTime(event.target.value)}
+                />
+              </Field>
+            </div>
+          </fieldset>
         </CardBody>
 
         <CardFooter className="flex-wrap justify-between gap-3">
@@ -276,6 +436,14 @@ export function CreateCampaignForm({
           </div>
         </CardFooter>
       </Card>
+
+      {selectedPlaybook ? (
+        <p className="flex items-center gap-2 text-xs text-muted">
+          <Badge tone="accent">{SEASON_LABELS[selectedPlaybook.season]}</Badge>
+          The checklist for “{selectedPlaybook.name}” is added once the campaign is
+          created.
+        </p>
+      ) : null}
     </form>
   );
 }

@@ -20,6 +20,9 @@ import {
   listCampaignPosts,
   orderedPhotos,
   photoIndexFor,
+  signPhotoUrls,
+  PREVIEW_URL_TTL_SECONDS,
+  getAssetsByIds,
 } from '@/lib/campaigns/queries';
 import {
   CAMPAIGN_STATUS_LABELS,
@@ -32,10 +35,19 @@ import {
 import { listPlatformLinks } from '@/lib/connections/queries';
 import { linkNote, unpublishablePlatforms } from '@/lib/connections/links';
 import { uuidSchema } from '@/lib/campaigns/validation';
+import {
+  listCampaignTasks,
+  listClientRefs,
+  listPlaybooks,
+  listStaffRefs,
+} from '@/lib/planner/queries';
 import { CampaignSettingsForm } from '../components/campaign-settings-form';
 import { PostCard } from '../components/post-card';
 import { AddPostForm } from '../components/add-post-form';
 import { PublishApprovedButton } from '../components/publish-approved-button';
+import { Checklist } from '../components/checklist';
+import { ApplyPlaybookPanel } from '../components/apply-playbook-panel';
+import { CoverPhotoPicker } from '../components/cover-photo-picker';
 
 export const metadata: Metadata = { title: 'Campaign' };
 
@@ -76,6 +88,24 @@ export default async function CampaignDetailPage(
   // Only the platforms this campaign actually targets. Warning about an
   // unlinked platform the campaign never uses is noise.
   const blocked = unpublishablePlatforms(links, platforms);
+
+  const [tasks, playbooks, clients, staff] = await Promise.all([
+    listCampaignTasks(supabase, campaign.id),
+    listPlaybooks(supabase),
+    listClientRefs(supabase),
+    listStaffRefs(supabase),
+  ]);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const currentPlaybook = playbooks.find((playbook) => playbook.id === campaign.playbook_id);
+
+  let coverUrl: string | null = null;
+  if (campaign.cover_asset_id) {
+    const [coverAsset] = await getAssetsByIds(supabase, [campaign.cover_asset_id]);
+    if (coverAsset) {
+      const signed = await signPhotoUrls(supabase, [coverAsset.storage_path], PREVIEW_URL_TTL_SECONDS);
+      coverUrl = signed.get(coverAsset.storage_path) ?? null;
+    }
+  }
 
   return (
     <>
@@ -155,6 +185,8 @@ export default async function CampaignDetailPage(
       ) : null}
 
       <div className="space-y-6">
+        <CoverPhotoPicker campaignId={campaign.id} coverUrl={coverUrl} />
+
         <CampaignSettingsForm
           links={links}
           campaign={{
@@ -167,7 +199,29 @@ export default async function CampaignDetailPage(
             platforms: campaign.platforms,
             startsOn: campaign.starts_on,
             endsOn: campaign.ends_on,
+            postingDays: campaign.posting_days,
+            postingTime: campaign.posting_time,
           }}
+        />
+
+        <ApplyPlaybookPanel
+          campaignId={campaign.id}
+          playbooks={playbooks}
+          hasStartDate={Boolean(campaign.starts_on)}
+          currentPlaybookName={currentPlaybook?.name ?? null}
+        />
+
+        <Checklist
+          campaignId={campaign.id}
+          tasks={tasks}
+          clients={clients}
+          staff={staff}
+          posts={posts.map((post) => ({
+            id: post.id,
+            platform: post.platform,
+            caption: post.caption,
+          }))}
+          todayIso={todayIso}
         />
 
         <section className="space-y-4">
