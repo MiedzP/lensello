@@ -22,17 +22,18 @@
  * test.
  */
 
-import { createSign } from 'node:crypto';
 import { IntegrationError } from '../types';
 import type { Timestamp } from '../../types';
 import type { CalendarClient, CalendarEvent, PublishResult } from '../types';
+import {
+  exchangeServiceAccountAssertion,
+  normaliseServiceAccountKey,
+  signServiceAccountAssertion,
+} from './google-auth';
 
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 const SCOPE = 'https://www.googleapis.com/auth/calendar';
 
-/** Google caps assertion lifetime at an hour. */
-const TOKEN_TTL_SECONDS = 3600;
 /** Refreshed early, so a request never sets off with a token about to expire. */
 const REFRESH_MARGIN_SECONDS = 60;
 
@@ -57,16 +58,9 @@ function requireConfig(): { email: string; privateKey: string; calendarId: strin
     );
   }
 
-  // A PEM key carries newlines, which environment variables generally cannot,
-  // so it arrives with them escaped. Signing fails opaquely if they are left
-  // that way — the error names the algorithm, not the key.
-  const privateKey = rawKey.includes('\\n') ? rawKey.replace(/\\n/g, '\n') : rawKey;
+  const privateKey = normaliseServiceAccountKey(rawKey);
 
   return { email, privateKey, calendarId };
-}
-
-function base64url(value: string | Buffer): string {
-  return Buffer.from(value).toString('base64url');
 }
 
 let cached: { token: string; expiresAt: number } | null = null;
@@ -83,59 +77,14 @@ async function accessToken(): Promise<string> {
 
   const { email, privateKey } = requireConfig();
 
-  const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claims = base64url(
-    JSON.stringify({
-      iss: email,
-      scope: SCOPE,
-      aud: TOKEN_URL,
-      iat: now,
-      exp: now + TOKEN_TTL_SECONDS,
-    }),
-  );
-
-  let signature: string;
-  try {
-    const signer = createSign('RSA-SHA256');
-    signer.update(`${header}.${claims}`);
-    signature = signer.sign(privateKey, 'base64url');
-  } catch (cause) {
-    throw new IntegrationError(
-      'The Google service account key could not be used to sign a request. ' +
-        'Check GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY is the full PEM block, ' +
-        'including the BEGIN and END lines.',
-      'google-calendar',
-    );
-  }
-
-  const response = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: `${header}.${claims}.${signature}`,
-    }).toString(),
+  const assertion = signServiceAccountAssertion({
+    email,
+    privateKey,
+    scope: SCOPE,
+    provider: 'google-calendar',
   });
 
-  const body = (await response.json()) as {
-    access_token?: string;
-    expires_in?: number;
-    error_description?: string;
-    error?: string;
-  };
-
-  if (!response.ok || !body.access_token) {
-    throw new IntegrationError(
-      `Google refused the service account: ${body.error_description ?? body.error ?? `HTTP ${response.status}`}`,
-      'google-calendar',
-      response.status >= 500,
-    );
-  }
-
-  cached = {
-    token: body.access_token,
-    expiresAt: now + (body.expires_in ?? TOKEN_TTL_SECONDS),
-  };
+  cached = await exchangeServiceAccountAssertion(assertion, 'google-calendar');
   return cached.token;
 }
 
