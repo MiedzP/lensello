@@ -1991,6 +1991,7 @@ export interface Database {
         >;
         Relationships: [];
       };
+    };
     Views: Record<never, never>;
     Functions: {
       is_staff: {

@@ -552,7 +552,6 @@ class MockPaymentClient implements PaymentClient {
   }
 }
 
-<<<<<<< HEAD
 // --- print lab ----------------------------------------------------------
 
 /**
@@ -912,7 +911,6 @@ class MockDriveSource implements DriveSource {
  */
 export function createMockDriveSource(): DriveSource {
   return new MockDriveSource();
-}
 }
 
 // --- registry -----------------------------------------------------------
