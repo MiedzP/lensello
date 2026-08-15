@@ -17,7 +17,7 @@
  * social adapter, and therefore never trips its missing-credential error.
  */
 
-import { createMockIntegrations } from './mock';
+import { createMockDriveSource, createMockIntegrations } from './mock';
 import { createPostmarkMailClient, isPostmarkConfigured } from './live/postmark';
 import { createMetaSocialGateway, isMetaConfigured } from './live/meta';
 import { createStripePaymentClient, isStripeConfigured } from './live/stripe';
@@ -26,11 +26,13 @@ import {
   createGoogleCalendarClient,
   isGoogleCalendarConfigured,
 } from './live/google-calendar';
+import { createGoogleDriveSource, isGoogleDriveConfigured } from './live/google-drive';
 import {
   IntegrationError,
   NotImplementedError,
   type AdManager,
   type CalendarClient,
+  type DriveSource,
   type IntegrationMode,
   type Integrations,
   type MailClient,
@@ -192,4 +194,54 @@ export function integrationStatus(): {
 /** Test seam: drops the memoised registry. */
 export function resetIntegrations(): void {
   cached = null;
+}
+
+// --- drive (photo import) -------------------------------------------------
+//
+// Deliberately not a field on `Integrations`: every other capability there is
+// something several modules reach for, so it belongs on the shared registry.
+// Drive photo import is owned start to finish by one module (browsing,
+// selecting, importing), the same shape as the connected-mailbox client
+// above — so it is resolved the same lazy, throw-when-unconfigured way
+// (see the module comment at the top of this file) without widening the
+// registry interface for every other module that never touches it.
+
+let driveSource: DriveSource | null = null;
+
+export function getDriveSource(): DriveSource {
+  if (driveSource) return driveSource;
+
+  if (isGoogleDriveConfigured()) {
+    driveSource = createGoogleDriveSource();
+    return driveSource;
+  }
+
+  if (resolveMode() === 'mock') {
+    driveSource = createMockDriveSource();
+    return driveSource;
+  }
+
+  throw new NotImplementedError(
+    'google-drive',
+    'importing photos from Drive. Set GOOGLE_SERVICE_ACCOUNT_EMAIL and ' +
+      'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY, and share the Drive folder with ' +
+      'the service account',
+  );
+}
+
+export { isGoogleDriveConfigured };
+
+/**
+ * Which mode Drive is actually running in, without constructing the adapter —
+ * same reasoning as `integrationStatus()` above, kept separate because Drive
+ * is not one of its fields.
+ */
+export function driveStatus(): 'live' | 'mock' | 'unavailable' {
+  if (isGoogleDriveConfigured()) return 'live';
+  return resolveMode() === 'mock' ? 'mock' : 'unavailable';
+}
+
+/** Test seam: drops the memoised Drive adapter. */
+export function resetDriveSource(): void {
+  driveSource = null;
 }

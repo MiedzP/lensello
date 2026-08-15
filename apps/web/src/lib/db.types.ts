@@ -792,6 +792,76 @@ export interface Database {
         Update: Partial<Omit<Database['public']['Tables']['ad_metrics']['Row'], 'id'>>;
         Relationships: [];
       };
+
+      drive_import_jobs: {
+        Row: {
+          id: string;
+          drive_folder_id: string;
+          drive_folder_name: string;
+          shoot_id: string;
+          status: 'pending' | 'running' | 'completed' | 'completed_with_errors';
+          total_files: number;
+          imported_files: number;
+          failed_files: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          drive_folder_id: string;
+          drive_folder_name: string;
+          shoot_id: string;
+          status?: Database['public']['Tables']['drive_import_jobs']['Row']['status'];
+          total_files?: number;
+          imported_files?: number;
+          failed_files?: number;
+          created_by?: string | null;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['drive_import_jobs']['Row'], 'id' | 'created_at'>
+        >;
+        Relationships: [];
+      };
+
+      drive_import_files: {
+        Row: {
+          id: string;
+          job_id: string;
+          drive_file_id: string;
+          name: string;
+          mime_type: string;
+          byte_size: number;
+          width: number | null;
+          height: number | null;
+          modified_time: string | null;
+          status: 'pending' | 'imported' | 'failed';
+          attempts: number;
+          asset_id: string | null;
+          error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          drive_file_id: string;
+          name: string;
+          mime_type: string;
+          byte_size?: number;
+          width?: number | null;
+          height?: number | null;
+          modified_time?: string | null;
+          status?: Database['public']['Tables']['drive_import_files']['Row']['status'];
+          attempts?: number;
+          asset_id?: string | null;
+          error?: string | null;
+        };
+        Update: Partial<
+          Omit<Database['public']['Tables']['drive_import_files']['Row'], 'id' | 'created_at'>
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<never, never>;
     Functions: {

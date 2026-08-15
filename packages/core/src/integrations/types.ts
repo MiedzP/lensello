@@ -295,6 +295,52 @@ export interface CalendarClient {
   deleteEvent(externalId: string): Promise<void>;
 }
 
+// --- drive (photo import) ------------------------------------------------
+
+/** A folder the service account can see — i.e. one the studio shared with it. */
+export interface DriveFolder {
+  id: string;
+  name: string;
+}
+
+/**
+ * One image file inside a folder, as Drive's own metadata describes it.
+ *
+ * Deliberately does not carry a byte source: browsing a folder of a few
+ * hundred photos must stay cheap, so listing is metadata-only and bytes are
+ * fetched per file, only for the ones actually selected for import.
+ */
+export interface DriveImage {
+  id: string;
+  name: string;
+  mimeType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  modifiedTime: Timestamp;
+}
+
+export interface DriveFile {
+  bytes: Uint8Array;
+  mimeType: string;
+}
+
+export interface DriveSource {
+  readonly provider: string;
+  /** Folders shared with the service account. Never the whole Drive. */
+  listFolders(): Promise<DriveFolder[]>;
+  /** Image files directly inside one folder. Not recursive into subfolders. */
+  listImages(folderId: string): Promise<DriveImage[]>;
+  /** The original bytes of one file. */
+  downloadFile(fileId: string): Promise<DriveFile>;
+  /**
+   * A small preview of one file, for a browse grid. Best effort: returns null
+   * rather than falling back to the full original, so browsing a few hundred
+   * files does not mean downloading a few hundred full-resolution photos.
+   */
+  fetchThumbnail(fileId: string): Promise<DriveFile | null>;
+}
+
 // --- payments -----------------------------------------------------------
 
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';

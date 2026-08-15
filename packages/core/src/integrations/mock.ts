@@ -17,6 +17,10 @@ import type {
   CalendarClient,
   CalendarEvent,
   CreateAdInput,
+  DriveFile,
+  DriveFolder,
+  DriveImage,
+  DriveSource,
   InboundMessage,
   Integrations,
   MailClient,
@@ -523,6 +527,140 @@ class MockPaymentClient implements PaymentClient {
       status: statuses[seed(externalId) % statuses.length]!,
     };
   }
+}
+
+// --- drive (photo import) -------------------------------------------------
+
+/**
+ * A minimal 1x1 transparent PNG, reused for every fixture file.
+ *
+ * The import pipeline trusts `DriveImage.width`/`height` from listing
+ * metadata rather than decoding bytes, so the mock's bytes never need to
+ * actually match the fixture dimensions — only be a well-formed image so a
+ * real upload to Storage succeeds end-to-end in mock mode.
+ */
+const MOCK_IMAGE_BYTES = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
+
+interface MockDriveFixtureFile {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  daysAgo: number;
+}
+
+interface MockDriveFixtureFolder {
+  folder: DriveFolder;
+  files: MockDriveFixtureFile[];
+}
+
+/**
+ * Fixture folders standing in for what the studio would actually share:
+ * in-house work and personal photography, kept apart from client shoots —
+ * exactly what the client described wanting reachable for marketing.
+ */
+const MOCK_DRIVE_FOLDERS: MockDriveFixtureFolder[] = [
+  {
+    folder: { id: 'folder_inhouse_speeches', name: 'In-house — Wedding Speeches' },
+    files: [
+      { id: 'file_speech_001', name: 'groom_speech_01.jpg', width: 4000, height: 2667, daysAgo: 40 },
+      { id: 'file_speech_002', name: 'groom_speech_02.jpg', width: 4000, height: 2667, daysAgo: 40 },
+      { id: 'file_speech_003', name: 'groom_speech_03.jpg', width: 3600, height: 2400, daysAgo: 40 },
+      { id: 'file_speech_004', name: 'best_man_speech_01.jpg', width: 4000, height: 2667, daysAgo: 40 },
+      { id: 'file_speech_005', name: 'best_man_speech_02.jpg', width: 4000, height: 2667, daysAgo: 40 },
+      { id: 'file_speech_006', name: 'father_of_bride_01.jpg', width: 3600, height: 2400, daysAgo: 40 },
+      { id: 'file_speech_007', name: 'toast_wide_01.jpg', width: 5000, height: 3333, daysAgo: 40 },
+      { id: 'file_speech_008', name: 'toast_wide_02.jpg', width: 5000, height: 3333, daysAgo: 40 },
+      { id: 'file_speech_009', name: 'guests_laughing_01.jpg', width: 4000, height: 2667, daysAgo: 40 },
+      { id: 'file_speech_010', name: 'guests_laughing_02.jpg', width: 4000, height: 2667, daysAgo: 40 },
+    ],
+  },
+  {
+    folder: { id: 'folder_family_album', name: 'Family Album — Beach Day' },
+    files: [
+      { id: 'file_beach_001', name: 'beach_family_01.jpg', width: 4032, height: 3024, daysAgo: 120 },
+      { id: 'file_beach_002', name: 'beach_family_02.jpg', width: 4032, height: 3024, daysAgo: 120 },
+      { id: 'file_beach_003', name: 'beach_kids_running.jpg', width: 4032, height: 3024, daysAgo: 120 },
+      { id: 'file_beach_004', name: 'beach_sunset_group.jpg', width: 5472, height: 3648, daysAgo: 120 },
+      { id: 'file_beach_005', name: 'beach_sandcastle.jpg', width: 4032, height: 3024, daysAgo: 120 },
+      { id: 'file_beach_006', name: 'beach_picnic.jpg', width: 4032, height: 3024, daysAgo: 120 },
+    ],
+  },
+  {
+    folder: { id: 'folder_studio_bts', name: 'Studio — Behind the Scenes' },
+    files: [
+      { id: 'file_bts_001', name: 'studio_setup_01.jpg', width: 3000, height: 2000, daysAgo: 15 },
+      { id: 'file_bts_002', name: 'studio_setup_02.jpg', width: 3000, height: 2000, daysAgo: 15 },
+      { id: 'file_bts_003', name: 'lighting_test_01.jpg', width: 3000, height: 2000, daysAgo: 15 },
+      { id: 'file_bts_004', name: 'lighting_test_02.jpg', width: 3000, height: 2000, daysAgo: 15 },
+    ],
+  },
+];
+
+function toMockDriveImage(file: MockDriveFixtureFile): DriveImage {
+  return {
+    id: file.id,
+    name: file.name,
+    mimeType: 'image/jpeg',
+    byteSize: between(`size:${file.id}`, 1_800_000, 9_500_000),
+    width: file.width,
+    height: file.height,
+    modifiedTime: new Date(Date.now() - file.daysAgo * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+class MockDriveSource implements DriveSource {
+  readonly provider = 'mock:google-drive';
+
+  async listFolders(): Promise<DriveFolder[]> {
+    await latency(200);
+    return MOCK_DRIVE_FOLDERS.map((entry) => entry.folder);
+  }
+
+  async listImages(folderId: string): Promise<DriveImage[]> {
+    await latency(300);
+    const entry = MOCK_DRIVE_FOLDERS.find((candidate) => candidate.folder.id === folderId);
+    if (!entry) {
+      throw new IntegrationError(
+        `No folder "${folderId}" is shared with the service account.`,
+        'mock:google-drive',
+      );
+    }
+    return entry.files.map(toMockDriveImage);
+  }
+
+  async downloadFile(fileId: string): Promise<DriveFile> {
+    await latency(250);
+    const found = MOCK_DRIVE_FOLDERS.flatMap((entry) => entry.files).find(
+      (file) => file.id === fileId,
+    );
+    if (!found) {
+      throw new IntegrationError(`No file "${fileId}" is visible to the service account.`, 'mock:google-drive');
+    }
+    return { bytes: MOCK_IMAGE_BYTES, mimeType: 'image/jpeg' };
+  }
+
+  async fetchThumbnail(fileId: string): Promise<DriveFile | null> {
+    await latency(120);
+    const found = MOCK_DRIVE_FOLDERS.flatMap((entry) => entry.files).find(
+      (file) => file.id === fileId,
+    );
+    if (!found) return null;
+    return { bytes: MOCK_IMAGE_BYTES, mimeType: 'image/jpeg' };
+  }
+}
+
+/**
+ * Standalone rather than part of `createMockIntegrations()` / `Integrations`:
+ * Drive is configured from the environment like Calendar, not per request, so
+ * it is resolved the same way Calendar is — see `getDriveSource()` in
+ * `index.ts` — and does not belong on the shared registry interface.
+ */
+export function createMockDriveSource(): DriveSource {
+  return new MockDriveSource();
 }
 
 // --- registry -----------------------------------------------------------

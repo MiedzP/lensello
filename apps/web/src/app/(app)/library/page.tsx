@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Images } from 'lucide-react';
+import { HardDrive, Images } from 'lucide-react';
 import { EmptyState, PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
 import { pluralize } from '@/lib/utils';
@@ -12,6 +12,7 @@ import {
 import { NewShootForm } from './components/new-shoot-form';
 import { ShootCard } from './components/shoot-card';
 import { ShootFiltersForm } from './components/shoot-filters';
+import { LinkButton } from './import/components/link-button';
 
 export const metadata: Metadata = { title: 'Library' };
 
@@ -40,6 +41,12 @@ export default async function LibraryPage(props: PageProps<'/library'>) {
       <PageHeader
         title="Library"
         description="Every shoot in the studio, with its photos, selects, and tags."
+        action={
+          <LinkButton href="/library/import">
+            <HardDrive size={15} aria-hidden="true" />
+            Import from Drive
+          </LinkButton>
+        }
       />
 
       <NewShootForm clients={clients} />
