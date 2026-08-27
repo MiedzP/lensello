@@ -20,6 +20,7 @@ export default function CampaignBuilder({ businessProfile, existingGoals }: Camp
   const [currentStep, setCurrentStep] = useState<BuilderStep>('what')
   const [isLoading, setIsLoading] = useState(false)
   const [campaignData, setCampaignData] = useState<Record<string, any>>({})
+  const [error, setError] = useState<string | null>(null)
 
   const STEPS: { id: BuilderStep; title: string }[] = [
     { id: 'what', title: 'What do you want more of?' },
@@ -49,12 +50,15 @@ export default function CampaignBuilder({ businessProfile, existingGoals }: Camp
 
   const handleLaunch = async () => {
     setIsLoading(true)
+    setError(null)
     try {
       await createCampaign(campaignData)
-      // Redirect to campaigns page
+      // Redirect to campaigns page on success
       window.location.href = '/campaigns'
-    } catch (error) {
-      console.error('Error creating campaign:', error)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create campaign'
+      console.error('Error creating campaign:', errorMessage, err)
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }
@@ -105,6 +109,20 @@ export default function CampaignBuilder({ businessProfile, existingGoals }: Camp
           ))}
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+          <p className="text-sm font-medium text-red-900">Error creating campaign:</p>
+          <p className="text-sm text-red-700 mt-1">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="text-xs text-red-600 hover:text-red-800 mt-2 underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Content */}
       <div className="bg-white rounded-lg p-8">

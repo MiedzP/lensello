@@ -12,6 +12,23 @@ export async function createCampaign(campaignData: Record<string, any>) {
   }
 
   try {
+    // Validate required fields
+    if (!campaignData.photographyType) {
+      throw new Error('Photography type is required')
+    }
+    if (!campaignData.priority) {
+      throw new Error('Priority is required')
+    }
+    if (!campaignData.channels || campaignData.channels.length === 0) {
+      throw new Error('At least one channel must be selected')
+    }
+    if (!campaignData.startDate) {
+      throw new Error('Campaign start date is required')
+    }
+    if (!campaignData.endDate) {
+      throw new Error('Campaign end date is required')
+    }
+
     // Create campaign from the goal-led data
     const { data: campaign, error } = await supabase
       .from('campaigns')
@@ -23,19 +40,27 @@ export async function createCampaign(campaignData: Record<string, any>) {
           brief: generateCampaignBrief(campaignData),
           platforms: campaignData.channels || [],
           audience: generateAudienceDescription(campaignData),
-          starts_on: campaignData.startDate || null,
-          ends_on: campaignData.endDate || null,
+          starts_on: campaignData.startDate,
+          ends_on: campaignData.endDate,
         },
       ])
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Supabase error creating campaign:', error)
+      throw new Error(error.message || 'Failed to create campaign in database')
+    }
+
+    if (!campaign) {
+      throw new Error('Campaign was created but no data returned')
+    }
 
     return { success: true, campaignId: campaign.id }
   } catch (error) {
-    console.error('Error creating campaign:', error)
-    throw new Error('Failed to create campaign')
+    const message = error instanceof Error ? error.message : 'Unknown error occurred'
+    console.error('Error creating campaign:', message, error)
+    throw new Error(`Failed to create campaign: ${message}`)
   }
 }
 
