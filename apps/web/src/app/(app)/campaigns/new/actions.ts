@@ -12,6 +12,18 @@ export async function createCampaign(campaignData: Record<string, any>) {
   }
 
   try {
+    // Debug logging
+    console.log('createCampaign received data:', {
+      keys: Object.keys(campaignData),
+      photographyType: campaignData.photographyType,
+      priority: campaignData.priority,
+      channels: campaignData.channels,
+      startDate: campaignData.startDate,
+      endDate: campaignData.endDate,
+      starts_on: campaignData.starts_on,
+      ends_on: campaignData.ends_on,
+    })
+
     // Validate required fields
     if (!campaignData.photographyType) {
       throw new Error('Photography type is required')
@@ -22,11 +34,16 @@ export async function createCampaign(campaignData: Record<string, any>) {
     if (!campaignData.channels || campaignData.channels.length === 0) {
       throw new Error('At least one channel must be selected')
     }
-    if (!campaignData.startDate) {
-      throw new Error('Campaign start date is required')
+
+    // Check both possible date field names
+    const startDate = campaignData.startDate || campaignData.starts_on
+    const endDate = campaignData.endDate || campaignData.ends_on
+
+    if (!startDate) {
+      throw new Error(`Campaign start date is required (received: startDate=${campaignData.startDate}, starts_on=${campaignData.starts_on})`)
     }
-    if (!campaignData.endDate) {
-      throw new Error('Campaign end date is required')
+    if (!endDate) {
+      throw new Error(`Campaign end date is required (received: endDate=${campaignData.endDate}, ends_on=${campaignData.ends_on})`)
     }
 
     // Create campaign from the goal-led data
@@ -37,11 +54,15 @@ export async function createCampaign(campaignData: Record<string, any>) {
           name: `${campaignData.photographyType} - ${campaignData.priority}`,
           objective: campaignData.priority,
           status: 'draft',
-          brief: generateCampaignBrief(campaignData),
+          brief: generateCampaignBrief({
+            ...campaignData,
+            startDate,
+            endDate,
+          }),
           platforms: campaignData.channels || [],
           audience: generateAudienceDescription(campaignData),
-          starts_on: campaignData.startDate,
-          ends_on: campaignData.endDate,
+          starts_on: startDate,
+          ends_on: endDate,
         },
       ])
       .select()

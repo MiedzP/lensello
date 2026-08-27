@@ -49,8 +49,10 @@ export default function StepDeadline({ onNext, onBack, initialData }: StepDeadli
     }
 
     onNext({
-      startDate,
-      endDate,
+      startDate: startDate,
+      endDate: endDate,
+      starts_on: startDate,  // Also pass database column names
+      ends_on: endDate,
     })
   }
 

@@ -52,6 +52,9 @@ export default function CampaignBuilder({ businessProfile, existingGoals }: Camp
     setIsLoading(true)
     setError(null)
     try {
+      // Debug: log what we're sending
+      console.log('Campaign data being sent:', campaignData)
+
       await createCampaign(campaignData)
       // Redirect to campaigns page on success
       window.location.href = '/campaigns'
