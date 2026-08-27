@@ -66,6 +66,21 @@ export async function requireUserOrRedirect(): Promise<Session> {
   }
 }
 
+/**
+ * Variant that also checks onboarding completion.
+ * Redirects to /onboarding if not completed.
+ */
+export async function requireUserOrRedirectWithOnboarding(): Promise<Session> {
+  const session = await requireUserOrRedirect();
+
+  // Check if onboarding is completed
+  if (!session.profile.onboarding_completed) {
+    redirect('/onboarding');
+  }
+
+  return session;
+}
+
 /** Returns the session, or null. For UI that renders differently when signed out. */
 export async function getSession(): Promise<Session | null> {
   try {

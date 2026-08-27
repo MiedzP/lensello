@@ -25,3 +25,4 @@ supabase/.temp/
 
 # Agent worktrees (live git worktrees, never part of a commit)
 .claude/worktrees/
+.env*

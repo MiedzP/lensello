@@ -35,5 +35,5 @@ export async function resolveContract(
 
   if (!contract) return null;
 
-  return { contract, problem: contractProblem(contract, Date.now()) };
+  return { contract: contract as Tables<'contracts'>, problem: contractProblem(contract as unknown as Tables<'contracts'>, Date.now()) };
 }
