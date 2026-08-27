@@ -56,8 +56,8 @@ export default function DashboardContent({
           </h1>
           <p className="text-slate-600 mt-1">Here's what's happening in your business</p>
         </div>
-        <Link href="/diagnostic">
-          <Button variant="outline" size="sm">
+        <Link href="/diagnostic" className="block">
+          <Button size="sm">
             View Diagnostic →
           </Button>
         </Link>
@@ -160,7 +160,7 @@ export default function DashboardContent({
                   {item.description}
                 </p>
               </div>
-              <Link href={item.link}>
+              <Link href={item.link as any}>
                 <Button variant="ghost" size="sm">
                   {item.action} →
                 </Button>
