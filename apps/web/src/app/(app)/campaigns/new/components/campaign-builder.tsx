@@ -34,7 +34,10 @@ export default function CampaignBuilder({ businessProfile, existingGoals }: Camp
   const progress = ((currentStepIndex + 1) / STEPS.length) * 100
 
   const handleNext = (data: Record<string, any>) => {
-    setCampaignData({ ...campaignData, ...data })
+    console.log('handleNext called with data from step:', currentStep, data)
+    const newCampaignData = { ...campaignData, ...data }
+    console.log('Updated campaignData:', newCampaignData)
+    setCampaignData(newCampaignData)
     const nextIndex = currentStepIndex + 1
     if (nextIndex < STEPS.length) {
       setCurrentStep(STEPS[nextIndex].id)

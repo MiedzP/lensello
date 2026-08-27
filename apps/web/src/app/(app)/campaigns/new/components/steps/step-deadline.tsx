@@ -48,6 +48,14 @@ export default function StepDeadline({ onNext, onBack, initialData }: StepDeadli
       return
     }
 
+    // Log what we're about to send
+    console.log('StepDeadline calling onNext with:', {
+      startDate,
+      endDate,
+      starts_on: startDate,
+      ends_on: endDate,
+    })
+
     onNext({
       startDate: startDate,
       endDate: endDate,
