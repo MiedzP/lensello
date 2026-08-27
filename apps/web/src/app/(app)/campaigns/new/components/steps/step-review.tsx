@@ -42,6 +42,18 @@ export default function StepReview({
               </p>
             </div>
             <div>
+              <p className="text-sm text-slate-600 font-medium mb-1">Starts</p>
+              <p className="text-lg font-semibold text-slate-900">
+                {campaignData.startDate ? new Date(campaignData.startDate).toLocaleDateString() : 'N/A'}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-slate-600 font-medium mb-1">Ends</p>
+              <p className="text-lg font-semibold text-slate-900">
+                {campaignData.endDate ? new Date(campaignData.endDate).toLocaleDateString() : 'N/A'}
+              </p>
+            </div>
+            <div>
               <p className="text-sm text-slate-600 font-medium mb-1">Status</p>
               <p className="text-lg font-semibold text-slate-900">Ready to launch</p>
             </div>

@@ -23,6 +23,8 @@ export async function createCampaign(campaignData: Record<string, any>) {
           brief: generateCampaignBrief(campaignData),
           platforms: campaignData.channels || [],
           audience: generateAudienceDescription(campaignData),
+          starts_on: campaignData.startDate || null,
+          ends_on: campaignData.endDate || null,
         },
       ])
       .select()
@@ -41,10 +43,15 @@ export async function createCampaign(campaignData: Record<string, any>) {
  * Generate campaign brief from goal-led inputs
  */
 function generateCampaignBrief(data: Record<string, any>): string {
+  const timeline = data.startDate && data.endDate
+    ? `Timeline: ${new Date(data.startDate).toLocaleDateString()} to ${new Date(data.endDate).toLocaleDateString()}`
+    : ''
+
   return `
 Campaign: ${data.photographyType}
 Goal: ${data.priority}
 Channels: ${data.channels?.join(', ') || 'TBD'}
+${timeline}
 
 Marketing Framework:
 1. **Landing Page** - Position this work type and capture enquiries

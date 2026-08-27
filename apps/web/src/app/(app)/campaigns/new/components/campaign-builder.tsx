@@ -4,11 +4,12 @@ import { useState } from 'react'
 import StepWhatYouWant from './steps/step-what-you-want'
 import StepPriority from './steps/step-priority'
 import StepChannels from './steps/step-channels'
+import StepDeadline from './steps/step-deadline'
 import StepReview from './steps/step-review'
 import { createCampaign } from '../actions'
 import { Button } from '@/components/ui/button'
 
-type BuilderStep = 'what' | 'priority' | 'channels' | 'review'
+type BuilderStep = 'what' | 'priority' | 'channels' | 'deadline' | 'review'
 
 interface CampaignBuilderProps {
   businessProfile: any
@@ -24,6 +25,7 @@ export default function CampaignBuilder({ businessProfile, existingGoals }: Camp
     { id: 'what', title: 'What do you want more of?' },
     { id: 'priority', title: 'What\'s your priority?' },
     { id: 'channels', title: 'Which channels?' },
+    { id: 'deadline', title: 'When will it run?' },
     { id: 'review', title: 'Review & Launch' },
   ]
 
@@ -121,6 +123,16 @@ export default function CampaignBuilder({ businessProfile, existingGoals }: Camp
         )}
         {currentStep === 'channels' && (
           <StepChannels onNext={handleNext} onBack={handleBack} />
+        )}
+        {currentStep === 'deadline' && (
+          <StepDeadline
+            onNext={handleNext}
+            onBack={handleBack}
+            initialData={{
+              startDate: campaignData.startDate,
+              endDate: campaignData.endDate,
+            }}
+          />
         )}
         {currentStep === 'review' && (
           <StepReview
