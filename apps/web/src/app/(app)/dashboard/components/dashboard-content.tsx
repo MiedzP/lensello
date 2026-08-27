@@ -49,11 +49,18 @@ export default function DashboardContent({
   return (
     <div className="space-y-8">
       {/* Greeting */}
-      <div>
-        <h1 className="text-4xl font-bold text-slate-900">
-          Good morning, {businessProfile?.business_name || 'Photographer'}
-        </h1>
-        <p className="text-slate-600 mt-1">Here's what's happening in your business</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-4xl font-bold text-slate-900">
+            Good morning, {businessProfile?.business_name || 'Photographer'}
+          </h1>
+          <p className="text-slate-600 mt-1">Here's what's happening in your business</p>
+        </div>
+        <Link href="/diagnostic">
+          <Button variant="outline" size="sm">
+            View Diagnostic →
+          </Button>
+        </Link>
       </div>
 
       {/* Key Metrics */}
