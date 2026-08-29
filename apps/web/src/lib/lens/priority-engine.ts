@@ -15,7 +15,7 @@ export interface Priority {
   severity: number // 0-100 for sorting
 }
 
-interface BusinessMetrics {
+export interface BusinessMetrics {
   monthlyEnquiries: number
   monthlyBookings: number
   conversionRate: number
@@ -71,10 +71,10 @@ export function generatePriorities(metrics: BusinessMetrics): Priority[] {
     priorities.push({
       level: 'red',
       category: 'follow-up',
-      title: `Follow up ${metrics.warm_enquiries_unanswered} warm enquiries`,
-      description: 'These prospects opened your pricing but haven\'t booked. They\'re likely to convert with a personal touch.',
-      action: 'Follow up',
-      actionLink: '/clients?filter=warm',
+      title: `Follow up ${metrics.warm_enquiries_unanswered} unhandled messages`,
+      description: 'You have unresponded enquiries in your inbox. Quick replies convert prospects into bookings.',
+      action: 'View inbox',
+      actionLink: '/conversations',
       severity: 85,
     })
   }
@@ -96,8 +96,8 @@ export function generatePriorities(metrics: BusinessMetrics): Priority[] {
     priorities.push({
       level: 'amber',
       category: 'nurture',
-      title: `${metrics.past_enquiries_unanswered} past enquiries could be reactivated`,
-      description: 'Launch a nurture campaign to reconnect with warm leads who went quiet.',
+      title: `${metrics.past_enquiries_unanswered} past enquiries haven't booked yet`,
+      description: 'Reconnect with prospects you quoted over 2 weeks ago. A gentle follow-up often closes the deal.',
       action: 'Create campaign',
       actionLink: '/campaigns/new',
       severity: 70,

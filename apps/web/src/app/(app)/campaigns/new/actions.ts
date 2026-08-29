@@ -125,8 +125,14 @@ function generateAudienceDescription(data: Record<string, any>): string {
     portraits: 'Professionals and families seeking portrait photography',
     families: 'Parents with children age 0-12 interested in family photos',
     newborns: 'New parents (up to 6 months postpartum)',
+    pet: 'Pet owners wanting professional portraits of their animals',
+    boudoir: 'Women seeking empowering boudoir and intimate photography sessions',
     headshots: 'Business professionals and executives',
     commercial: 'Business owners seeking commercial photography',
+    property: 'Real estate agents and property developers',
+    school: 'School administrators and PTAs arranging school photography events',
+    sports: 'Athletes and sports teams seeking professional sports photography',
+    event: 'Event coordinators and businesses hosting celebrations and conferences',
   }
 
   return (

@@ -100,6 +100,24 @@ export async function countUnhandled(supabase: Supabase): Promise<number> {
   return count ?? 0;
 }
 
+/**
+ * Count enquiries that haven't been contacted recently.
+ * Used for priority scoring — clients in early stages with no recent contact
+ * are candidates for a nurture campaign.
+ */
+export async function countStaleUnbooked(
+  supabase: Supabase,
+  olderThanDays: number,
+): Promise<number> {
+  const cutoffDate = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
+  const { count } = await supabase
+    .from('clients')
+    .select('id', { count: 'exact', head: true })
+    .in('stage', ['lead', 'inquiry', 'quoted'])
+    .lt('coalesce(last_contacted_at, created_at)', cutoffDate);
+  return count ?? 0;
+}
+
 /** The CRM list, optionally narrowed to one stage. */
 export async function listClients(
   supabase: Supabase,

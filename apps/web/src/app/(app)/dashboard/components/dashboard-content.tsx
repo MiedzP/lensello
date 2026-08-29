@@ -3,13 +3,15 @@
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import type { Priority } from '@/lib/lens/priority-engine'
 
 interface DashboardContentProps {
   businessProfile: any
   enquiries: number
   bookings: number
   pipelineValue: number
-  priorities: any[]
+  priorities: Priority[]
+  recommendedAction: Priority | null
 }
 
 export default function DashboardContent({
@@ -18,33 +20,8 @@ export default function DashboardContent({
   bookings,
   pipelineValue,
   priorities,
+  recommendedAction,
 }: DashboardContentProps) {
-  // Simulated priorities (Red/Amber/Green logic would come from a decision engine)
-  const dashboardPriorities = [
-    {
-      priority: 'red',
-      title: 'Follow up 7 warm enquiries',
-      description: 'These prospects opened your pricing but haven\'t booked',
-      action: 'Follow up',
-      link: '/clients?filter=warm',
-    },
-    {
-      priority: 'amber',
-      title: 'Refresh your Meta creative',
-      description: 'Your ad performance has declined this week',
-      action: 'Create new',
-      link: '/ads/creative',
-    },
-    {
-      priority: 'green',
-      title: 'Publishing performing well',
-      description: 'Your venue content generated 8 enquiries this month',
-      action: 'View stats',
-      link: '/library?stats=true',
-    },
-  ]
-
-  const opportunityCount = 23 // Placeholder
 
   return (
     <div className="space-y-8">
@@ -98,127 +75,123 @@ export default function DashboardContent({
       <div>
         <h2 className="text-2xl font-bold text-slate-900 mb-4">Your Marketing Priorities</h2>
 
-        <div className="space-y-3">
-          {dashboardPriorities.map((item, index) => (
-            <div
-              key={index}
-              className={`p-4 rounded-lg border-l-4 flex items-start justify-between ${
-                item.priority === 'red'
-                  ? 'bg-red-50 border-l-red-600'
-                  : item.priority === 'amber'
-                    ? 'bg-amber-50 border-l-amber-600'
-                    : 'bg-green-50 border-l-green-600'
-              }`}
-            >
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <div
-                    className={`w-3 h-3 rounded-full ${
-                      item.priority === 'red'
-                        ? 'bg-red-600'
-                        : item.priority === 'amber'
-                          ? 'bg-amber-600'
-                          : 'bg-green-600'
-                    }`}
-                  />
+        {priorities.length === 0 ? (
+          <div className="p-6 bg-slate-50 rounded-lg text-center text-slate-600">
+            <p className="font-medium">Nothing urgent this week</p>
+            <p className="text-sm mt-1">Keep up the great work!</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {priorities.map((item) => (
+              <div
+                key={item.actionLink}
+                className={`p-4 rounded-lg border-l-4 flex items-start justify-between ${
+                  item.level === 'red'
+                    ? 'bg-red-50 border-l-red-600'
+                    : item.level === 'amber'
+                      ? 'bg-amber-50 border-l-amber-600'
+                      : 'bg-green-50 border-l-green-600'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div
+                      className={`w-3 h-3 rounded-full ${
+                        item.level === 'red'
+                          ? 'bg-red-600'
+                          : item.level === 'amber'
+                            ? 'bg-amber-600'
+                            : 'bg-green-600'
+                      }`}
+                    />
+                    <p
+                      className={`font-semibold ${
+                        item.level === 'red'
+                          ? 'text-red-900'
+                          : item.level === 'amber'
+                            ? 'text-amber-900'
+                            : 'text-green-900'
+                      }`}
+                    >
+                      {item.level === 'red'
+                        ? 'ACTION NEEDED'
+                        : item.level === 'amber'
+                          ? 'OPPORTUNITY'
+                          : 'WORKING WELL'}
+                    </p>
+                  </div>
                   <p
-                    className={`font-semibold ${
-                      item.priority === 'red'
+                    className={`font-medium ${
+                      item.level === 'red'
                         ? 'text-red-900'
-                        : item.priority === 'amber'
+                        : item.level === 'amber'
                           ? 'text-amber-900'
                           : 'text-green-900'
                     }`}
                   >
-                    {item.priority === 'red'
-                      ? 'ACTION NEEDED'
-                      : item.priority === 'amber'
-                        ? 'OPPORTUNITY'
-                        : 'WORKING WELL'}
+                    {item.title}
+                  </p>
+                  <p
+                    className={`text-sm mt-1 ${
+                      item.level === 'red'
+                        ? 'text-red-700'
+                        : item.level === 'amber'
+                          ? 'text-amber-700'
+                          : 'text-green-700'
+                    }`}
+                  >
+                    {item.description}
                   </p>
                 </div>
-                <p
-                  className={`font-medium ${
-                    item.priority === 'red'
-                      ? 'text-red-900'
-                      : item.priority === 'amber'
-                        ? 'text-amber-900'
-                        : 'text-green-900'
-                  }`}
-                >
-                  {item.title}
-                </p>
-                <p
-                  className={`text-sm mt-1 ${
-                    item.priority === 'red'
-                      ? 'text-red-700'
-                      : item.priority === 'amber'
-                        ? 'text-amber-700'
-                        : 'text-green-700'
-                  }`}
-                >
-                  {item.description}
-                </p>
+                <Link href={item.actionLink}>
+                  <Button variant="ghost" size="sm">
+                    {item.action} →
+                  </Button>
+                </Link>
               </div>
-              <Link href={item.link as any}>
-                <Button variant="ghost" size="sm">
-                  {item.action} →
-                </Button>
-              </Link>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Opportunity */}
-      <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-50 border-blue-200">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 mb-2">Untapped Opportunity</h3>
-            <p className="text-slate-600 mb-4">
-              You have {opportunityCount} past enquiries who haven't booked. They're warm leads
-              ready to re-engage.
-            </p>
-            <Button>
-              <Link href="/clients?filter=lost">Create nurture campaign →</Link>
-            </Button>
-          </div>
-          <div className="text-4xl">🎯</div>
-        </div>
-      </Card>
-
-      {/* Next Actions */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-4">Recommended Next Action</h2>
+      {/* Recommended Next Action */}
+      {recommendedAction && (
         <Card className="p-6 bg-slate-50">
-          <p className="text-slate-700 mb-4">
-            Based on your goals and current performance, here's what to focus on this week:
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">Recommended Next Action</h2>
+          <p className="text-slate-700 mb-6">
+            Based on your business metrics, focus on this:
           </p>
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
-                1
-              </div>
-              <p className="text-slate-900 font-medium">Launch your Autumn 2027 campaign</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-slate-300 text-slate-600 flex items-center justify-center font-bold text-sm">
-                2
-              </div>
-              <p className="text-slate-600 font-medium">Follow up on warm enquiries</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-slate-300 text-slate-600 flex items-center justify-center font-bold text-sm">
-                3
-              </div>
-              <p className="text-slate-600 font-medium">Analyze this week's campaign performance</p>
-            </div>
+          <div className={`p-4 rounded-lg border-l-4 ${
+            recommendedAction.level === 'red'
+              ? 'bg-red-50 border-l-red-600'
+              : recommendedAction.level === 'amber'
+                ? 'bg-amber-50 border-l-amber-600'
+                : 'bg-green-50 border-l-green-600'
+          }`}>
+            <h3 className={`font-bold text-lg ${
+              recommendedAction.level === 'red'
+                ? 'text-red-900'
+                : recommendedAction.level === 'amber'
+                  ? 'text-amber-900'
+                  : 'text-green-900'
+            }`}>
+              {recommendedAction.title}
+            </h3>
+            <p className={`text-sm mt-2 ${
+              recommendedAction.level === 'red'
+                ? 'text-red-700'
+                : recommendedAction.level === 'amber'
+                  ? 'text-amber-700'
+                  : 'text-green-700'
+            }`}>
+              {recommendedAction.description}
+            </p>
+            <Link href={recommendedAction.actionLink}>
+              <Button className="mt-4">{recommendedAction.action} →</Button>
+            </Link>
           </div>
-          <Link href="/campaigns">
-            <Button className="mt-6">Start campaign →</Button>
-          </Link>
         </Card>
-      </div>
+      )}
     </div>
   )
 }

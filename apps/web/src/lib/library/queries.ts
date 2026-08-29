@@ -174,6 +174,22 @@ export async function listClientOptions(supabase: Db): Promise<ClientOption[]> {
   return data ?? [];
 }
 
+/**
+ * The most recent shoot date, for portfolio freshness scoring.
+ * Returns null if no shoots exist or all are undated.
+ */
+export async function getLatestShootDate(supabase: Db): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('shoots')
+    .select('shot_at')
+    .order('shot_at', { ascending: false, nullsFirst: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`Could not load latest shoot date: ${error.message}`);
+  return data?.shot_at ?? null;
+}
+
 export async function listShoots(
   supabase: Db,
   filters: ShootFilters,
