@@ -19,13 +19,13 @@ export default function DiagnosticView({ diagnostic }: DiagnosticViewProps) {
 
   // Count statuses
   const redCount = Object.values(diagnostic)
-    .filter(v => typeof v === 'object' && v.status === 'red')
+    .filter(v => v !== null && typeof v === 'object' && 'status' in v && v.status === 'red')
     .length
   const amberCount = Object.values(diagnostic)
-    .filter(v => typeof v === 'object' && v.status === 'amber')
+    .filter(v => v !== null && typeof v === 'object' && 'status' in v && v.status === 'amber')
     .length
   const greenCount = Object.values(diagnostic)
-    .filter(v => typeof v === 'object' && v.status === 'green')
+    .filter(v => v !== null && typeof v === 'object' && 'status' in v && v.status === 'green')
     .length
 
   return (
