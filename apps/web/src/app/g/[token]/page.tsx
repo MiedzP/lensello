@@ -9,10 +9,12 @@ import {
   listGalleryPhotos,
   recordView,
   resolveGallery,
+  type DisplayStyle,
 } from '@/lib/galleries/queries';
 import { listGallerySections } from '@/lib/galleries/sections';
 import { hashVisitor } from '@/lib/galleries/tokens';
 import { unlockCookieName, verifyUnlock } from '@/lib/galleries/unlock';
+import { asGalleryLayout } from '@/lib/validators';
 import { GalleryGrid, GalleryLock } from './gallery-grid';
 
 /**
@@ -167,7 +169,7 @@ export default async function GalleryPage(props: PageProps<'/g/[token]'>) {
             token={token}
             photos={photos}
             sections={sections}
-            displayStyle={gallery.display_style}
+            displayStyle={asGalleryLayout(gallery.display_style) as DisplayStyle}
             accentColor={gallery.accent_color}
             // No `allow_style_switch` column exists yet (see the report at
             // merge time) — a client can always try another look at their own

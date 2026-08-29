@@ -6,6 +6,7 @@ import { Button, Card, CardBody, CardHeader, ErrorNote, Select } from '@/compone
 import { IDLE } from '@/lib/campaigns/action-state';
 import type { CampaignPlaybookRow } from '@/lib/planner/types';
 import { SEASON_LABELS, sortSeasons } from '@/lib/planner/display';
+import { asCampaignTag } from '@/lib/validators';
 import { applyPlaybook } from '../planner-actions';
 
 /**
@@ -27,7 +28,7 @@ export function ApplyPlaybookPanel({
 }) {
   const [state, action, pending] = useActionState(applyPlaybook, IDLE);
   const [playbookId, setPlaybookId] = useState(playbooks[0]?.id ?? '');
-  const seasons = sortSeasons([...new Set(playbooks.map((p) => p.season))]);
+  const seasons = sortSeasons([...new Set(playbooks.map((p) => asCampaignTag(p.season)))]);
 
   if (playbooks.length === 0) return null;
 

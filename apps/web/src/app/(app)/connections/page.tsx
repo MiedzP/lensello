@@ -4,6 +4,7 @@ import { getIntegrations, integrationStatus } from '@lensello/core/integrations'
 import { Card, CardBody, ErrorNote, PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
 import { listConnections } from '@/lib/connections/queries';
+import { asMailboxStatus } from '@/lib/validators';
 import {
   UNSUPPORTED_PLATFORMS,
   isConnectable,
@@ -74,7 +75,7 @@ export default async function ConnectionsPage(props: PageProps<'/connections'>) 
         displayName: mailbox.display_name,
         imapHost: mailbox.imap_host,
         smtpHost: mailbox.smtp_host,
-        status: mailbox.status,
+        status: asMailboxStatus(mailbox.status),
         lastError: mailbox.last_error,
         lastSyncedLabel: mailbox.last_synced_at
           ? new Date(mailbox.last_synced_at).toLocaleString('en-US', {

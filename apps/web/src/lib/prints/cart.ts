@@ -148,7 +148,7 @@ export async function addCartItem(
       unit_price: product.price,
       product_name: product.name,
       size_label: product.size_label,
-      crop: input.crop as TablesInsert<'print_order_items'>['crop'],
+      crop: input.crop as unknown as TablesInsert<'print_order_items'>['crop'],
     })
     .select('*')
     .single();

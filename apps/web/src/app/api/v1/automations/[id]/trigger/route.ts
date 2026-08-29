@@ -25,7 +25,7 @@ export const maxDuration = 60;
 
 export async function POST(request: Request, context: RouteContext<'/api/v1/automations/[id]/trigger'>) {
   const auth = await authenticateApiRequest(request, 'automations:trigger');
-  if (!auth.ok) return auth.response;
+  if (auth.ok === false) return auth.response;
 
   const { id } = await context.params;
   if (!z.uuid().safeParse(id).success) {

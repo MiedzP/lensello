@@ -52,6 +52,7 @@ import {
 } from '@/lib/clients/schemas';
 import { suggestNextStage } from '@/lib/clients/stages';
 import { syncInboundMail } from '@/lib/clients/sync';
+import { asClientStage } from '@/lib/validators';
 import type { SyncState, RecordState, StageState, HandledState, SendState, EraseState } from './form-state';
 
 /** Postgres unique-violation. Surfaced as a field error, not a stack trace. */
@@ -514,7 +515,7 @@ export async function sendReplyAction(
   return {
     sent: true,
     error: null,
-    suggestedStage: suggestNextStage(client.stage),
+    suggestedStage: suggestNextStage(asClientStage(client.stage)),
     token,
     sentCount: previous.sentCount + 1,
   };

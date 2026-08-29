@@ -45,6 +45,7 @@ import {
   type GigUpdate,
 } from '@/lib/gigs/types';
 import { parseGigForm, readGigForm } from '@/lib/gigs/validation';
+import { asGigStatus, asContractStatus } from '@/lib/validators';
 
 type Db = Session['supabase'];
 
@@ -61,7 +62,7 @@ function toConflict(gig: GigRow): ConflictSummary {
     title: gig.title,
     startsAt: gig.starts_at,
     endsAt: gig.ends_at,
-    status: gig.status,
+    status: asGigStatus(gig.status),
   };
 }
 
@@ -153,7 +154,7 @@ export async function saveGig(
 
   const parsed = parseGigForm(values);
   if (!parsed.ok) {
-    return { ...emptyGigFormState(values), phase: 'error', errors: parsed.errors };
+    return { ...emptyGigFormState(values), phase: 'error', errors: 'errors' in parsed ? parsed.errors : {} };
   }
   const gig = parsed.gig;
 
@@ -174,7 +175,7 @@ export async function saveGig(
   // detail form and the status panel enforce the same graph, so a POST naming
   // "completed" on an inquiry is rejected in both places. A brand-new gig can be
   // created at any status, because back-filling last year's wedding is normal.
-  if (existing && gig.status !== existing.status && !canTransition(existing.status, gig.status)) {
+  if (existing && gig.status !== existing.status && !canTransition(asGigStatus(existing.status), asGigStatus(gig.status))) {
     return {
       ...emptyGigFormState(values),
       phase: 'error',
@@ -230,7 +231,7 @@ export async function saveGig(
         formError: `Could not save the gig: ${error?.message ?? 'no row came back'}`,
       };
     }
-    saved = data as GigRow;
+    saved = { ...data, status: asGigStatus(data.status) } as GigRow;
   } else {
     const { data, error } = await supabase
       .from('gigs')
@@ -245,7 +246,7 @@ export async function saveGig(
         formError: `Could not create the gig: ${error?.message ?? 'no row came back'}`,
       };
     }
-    saved = data as GigRow;
+    saved = { ...data, status: asGigStatus(data.status) } as GigRow;
   }
 
   const warning = await reconcileCalendar(supabase, saved);
@@ -270,10 +271,10 @@ export async function setGigStatus(
   const { supabase } = await requireUser();
 
   const gigId = field(formData, 'gigId');
-  const next = field(formData, 'status');
+  const nextStatus = field(formData, 'status');
   const override = field(formData, 'override') === '1';
 
-  if (!isGigStatus(next)) {
+  if (!isGigStatus(nextStatus)) {
     return { ...EMPTY_STATUS_STATE, phase: 'error', message: 'That is not a gig status.' };
   }
 
@@ -282,19 +283,20 @@ export async function setGigStatus(
     return { ...EMPTY_STATUS_STATE, phase: 'error', message: 'That gig no longer exists.' };
   }
 
-  if (gig.status === next) {
-    return { ...EMPTY_STATUS_STATE, phase: 'done', message: `Already ${next}.` };
+  const gigStatus = asGigStatus(gig.status);
+  if (gigStatus === nextStatus) {
+    return { ...EMPTY_STATUS_STATE, phase: 'done', message: `Already ${nextStatus}.` };
   }
 
-  if (!canTransition(gig.status, next)) {
+  if (!canTransition(gigStatus, nextStatus)) {
     return {
       ...EMPTY_STATUS_STATE,
       phase: 'error',
-      message: `A gig cannot go straight from ${gig.status} to ${next}.`,
+      message: `A gig cannot go straight from ${gigStatus} to ${nextStatus}.`,
     };
   }
 
-  if (isBlockingStatus(next) && !override) {
+  if (isBlockingStatus(nextStatus) && !override) {
     const conflicts = await findConflictingGigs(supabase, {
       startsAt: gig.starts_at,
       endsAt: gig.ends_at,
@@ -306,14 +308,14 @@ export async function setGigStatus(
         phase: 'conflict',
         message: null,
         conflicts: conflicts.map(toConflict),
-        pendingStatus: next,
+        pendingStatus: nextStatus,
       };
     }
   }
 
   const { data, error } = await supabase
     .from('gigs')
-    .update({ status: next } satisfies GigUpdate)
+    .update({ status: nextStatus } satisfies GigUpdate)
     .eq('id', gig.id)
     .select('*')
     .single();
@@ -326,7 +328,7 @@ export async function setGigStatus(
     };
   }
 
-  const warning = await reconcileCalendar(supabase, data as GigRow);
+  const warning = await reconcileCalendar(supabase, { ...data, status: asGigStatus(data.status) } as GigRow);
 
   invalidate(gig.id);
   refresh();
@@ -334,7 +336,7 @@ export async function setGigStatus(
   return {
     ...EMPTY_STATUS_STATE,
     phase: 'done',
-    message: warning ?? `Status changed to ${next}.`,
+    message: warning ?? `Status changed to ${nextStatus}.`,
   };
 }
 

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft, Images } from 'lucide-react';
 import { Badge, EmptyState, PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
+import { asCampaignPlatform, asCampaignStatus } from '@/lib/validators';
 import { isAiConfigured } from '@/lib/ai';
 import { pluralize } from '@/lib/utils';
 import {
@@ -138,8 +139,8 @@ export default async function CampaignDetailPage(
       />
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <Badge tone={CAMPAIGN_STATUS_TONES[campaign.status as CampaignStatus]}>
-          {CAMPAIGN_STATUS_LABELS[campaign.status as CampaignStatus] ??
+        <Badge tone={CAMPAIGN_STATUS_TONES[asCampaignStatus(campaign.status)]}>
+          {CAMPAIGN_STATUS_LABELS[asCampaignStatus(campaign.status)] ??
             campaign.status}
         </Badge>
         {POST_STATUSES.filter((status) => counts[status] > 0).map((status) => (
@@ -193,7 +194,7 @@ export default async function CampaignDetailPage(
             id: campaign.id,
             name: campaign.name,
             objective: campaign.objective,
-            status: campaign.status,
+            status: asCampaignStatus(campaign.status),
             brief: campaign.brief,
             audience: campaign.audience,
             platforms: campaign.platforms,
@@ -244,11 +245,11 @@ export default async function CampaignDetailPage(
                 key={post.id}
                 post={{
                   id: post.id,
-                  platform: post.platform,
+                  platform: asCampaignPlatform(post.platform),
                   caption: post.caption,
                   hashtags: post.hashtags,
                   assetIds: post.asset_ids,
-                  status: post.status,
+                  status: asCampaignStatus(post.status),
                   scheduledFor: post.scheduled_for,
                   publishedAt: post.published_at,
                   externalId: post.external_id,

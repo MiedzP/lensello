@@ -15,6 +15,7 @@ import type { createAdminClient } from '@/lib/supabase/admin';
 import type { Tables } from '@/lib/db.types';
 import { hashToken } from '@/lib/crypto/share-token';
 import { contractProblem, type ContractProblem } from './access';
+import { asContractStatus } from '@/lib/validators';
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -35,5 +36,9 @@ export async function resolveContract(
 
   if (!contract) return null;
 
-  return { contract: contract as Tables<'contracts'>, problem: contractProblem(contract as unknown as Tables<'contracts'>, Date.now()) };
+  const contractAccess = {
+    status: asContractStatus(contract.status),
+    expires_at: contract.expires_at,
+  };
+  return { contract: contract as Tables<'contracts'>, problem: contractProblem(contractAccess, Date.now()) };
 }

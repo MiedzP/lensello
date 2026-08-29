@@ -22,6 +22,7 @@ import { buildClientReplyPrompt } from '@lensello/core/ai';
 import type { DateOnly } from '@lensello/core';
 import { AiError, generateJson, isAiConfigured } from '@/lib/ai';
 import type { Session } from '@/lib/auth';
+import { asClientStage, asClientSource, asMessageDirection } from '@/lib/validators';
 import { getClientDetail, isDateAvailable } from './queries';
 import { replyDraftSchema, type FactsInput, type ReplyDraft } from './schemas';
 
@@ -94,11 +95,11 @@ export async function draftClientReply(
   const prompt = buildClientReplyPrompt({
     client: {
       name: detail.client.name,
-      stage: detail.client.stage,
-      source: detail.client.source,
+      stage: asClientStage(detail.client.stage),
+      source: asClientSource(detail.client.source),
     },
     thread: detail.thread.slice(-THREAD_WINDOW).map((message) => ({
-      direction: message.direction,
+      direction: asMessageDirection(message.direction),
       subject: message.subject,
       body: truncate(message.body),
       sentAt: message.sent_at,

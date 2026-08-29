@@ -35,6 +35,7 @@ import {
   listShootTypesInUse,
 } from '@/lib/ads/queries';
 import { AdForm, type AdFormValues } from '../components/ad-form';
+import { asAdPlatform, asAdStatus } from '@/lib/validators';
 import { AdPreview } from '../components/ad-preview';
 import { DailyChart } from '../components/daily-chart';
 import { DailyTable } from '../components/daily-table';
@@ -66,7 +67,7 @@ export default async function AdDetailPage(props: PageProps<'/ads/[adId]'>) {
   const initial: AdFormValues = {
     id: ad.id,
     name: ad.name,
-    platform: ad.platform,
+    platform: asAdPlatform(ad.platform),
     headline: ad.headline,
     primaryText: ad.primary_text,
     callToAction: ad.call_to_action,
@@ -84,7 +85,7 @@ export default async function AdDetailPage(props: PageProps<'/ads/[adId]'>) {
         title={ad.name}
         description={
           <>
-            {AD_PLATFORM_LABELS[ad.platform]} ·{' '}
+            {AD_PLATFORM_LABELS[asAdPlatform(ad.platform)]} ·{' '}
             {formatCents(ad.daily_budget_cents)}/day ·{' '}
             {formatDateWindow(ad.starts_on, ad.ends_on)} ·{' '}
             <Link href="/ads" className="text-accent hover:underline">
@@ -93,8 +94,8 @@ export default async function AdDetailPage(props: PageProps<'/ads/[adId]'>) {
           </>
         }
         action={
-          <Badge tone={AD_STATUS_TONES[ad.status]}>
-            {AD_STATUS_LABELS[ad.status]}
+          <Badge tone={AD_STATUS_TONES[asAdStatus(ad.status)]}>
+            {AD_STATUS_LABELS[asAdStatus(ad.status)]}
           </Badge>
         }
       />
@@ -177,7 +178,7 @@ export default async function AdDetailPage(props: PageProps<'/ads/[adId]'>) {
             <CardBody>
               <StatusControls
                 adId={ad.id}
-                status={ad.status}
+                status={asAdStatus(ad.status)}
                 externalId={ad.external_id}
               />
             </CardBody>
@@ -190,7 +191,7 @@ export default async function AdDetailPage(props: PageProps<'/ads/[adId]'>) {
             />
             <CardBody>
               <AdPreview
-                platform={ad.platform}
+                platform={asAdPlatform(ad.platform)}
                 headline={ad.headline}
                 primaryText={ad.primary_text}
                 callToAction={ad.call_to_action}

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ChevronDown, ChevronRight, ChevronUp, Clock } from 'lucide-react';
+import { asLessonStatus } from '@/lib/validators';
 import type { LessonWithProgress } from '@/lib/academy/queries';
 import { moveLesson } from '../actions';
 import { ProgressBadge, PublishBadge } from './badges';
@@ -61,7 +62,7 @@ export function LessonRow({
       ) : null}
 
       <PublishBadge isPublished={lesson.is_published} />
-      <ProgressBadge status={lesson.progress?.status ?? null} />
+      <ProgressBadge status={lesson.progress?.status ? asLessonStatus(lesson.progress.status) : null} />
 
       <Link
         href={`/academy/${moduleSlug}/${lesson.slug}/edit`}

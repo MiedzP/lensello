@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireUserOrRedirect } from '@/lib/auth'
+import { asOnboardingStep } from '@/lib/validators'
 import OnboardingFlow from './components/onboarding-flow'
 
 export default async function OnboardingPage() {
@@ -20,5 +21,5 @@ export default async function OnboardingPage() {
     redirect('/dashboard')
   }
 
-  return <OnboardingFlow initialStep={profile?.onboarding_step || null} />
+  return <OnboardingFlow initialStep={profile?.onboarding_step ? asOnboardingStep(profile.onboarding_step) : null} />
 }

@@ -3,8 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Activity,
+  BarChart3,
   Bot,
   CalendarDays,
+  Clock,
   GalleryVerticalEnd,
   GraduationCap,
   Images,
@@ -20,8 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Ordered by how often the studio actually opens them, not by module age:
-// the calendar and the inbox are daily, the academy is occasional.
+// Ordered by frequency of use and business importance
 const LINKS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
@@ -32,6 +34,10 @@ const LINKS = [
   { href: '/studio', label: 'Studio', icon: Sparkles },
   { href: '/clients', label: 'Clients', icon: MessagesSquare },
   { href: '/gigs', label: 'Gigs', icon: CalendarDays },
+  { href: '/diagnostic', label: 'Diagnostic', icon: Activity },
+  { href: '/monthly-review', label: 'Monthly Review', icon: BarChart3 },
+  { href: '/quarterly-planning', label: 'Quarterly Plan', icon: Target },
+  { href: '/rhythm', label: 'Rhythm', icon: Clock },
   { href: '/store', label: 'Store', icon: ShoppingBag },
   { href: '/ads', label: 'Ads', icon: Target },
   { href: '/automations', label: 'Automations', icon: Bot },

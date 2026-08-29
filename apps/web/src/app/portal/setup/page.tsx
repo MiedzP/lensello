@@ -34,7 +34,7 @@ export default async function PortalSetupPage(props: PageProps<'/portal/setup'>)
           </p>
         </div>
 
-        {resolved.ok ? (
+        {resolved.ok === true ? (
           <SetupForm token={rawToken} email={resolved.account.email} />
         ) : (
           <p className="text-center text-sm text-danger">{resolved.error}</p>

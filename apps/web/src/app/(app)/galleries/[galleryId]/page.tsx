@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
+import { asGalleryLayout } from '@/lib/validators';
 import { getGalleryForStaff, signAssetThumbnails } from '@/lib/galleries/queries';
 import { listGallerySections } from '@/lib/galleries/sections';
 import { listClientOptions } from '@/lib/library/queries';
@@ -49,7 +50,7 @@ export default async function GalleryAdminPage(props: PageProps<'/galleries/[gal
       <div className="space-y-6">
         <PresentationPanel
           galleryId={detail.gallery.id}
-          displayStyle={detail.gallery.display_style}
+          displayStyle={asGalleryLayout(detail.gallery.display_style)}
           accentColor={detail.gallery.accent_color}
           coverAssetId={detail.gallery.cover_asset_id}
           assets={coverThumbs}

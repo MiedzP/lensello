@@ -64,6 +64,7 @@ import {
 } from '@/lib/campaigns/validation';
 import { buildCampaignTaskInserts } from '@/lib/planner/apply';
 import { listPlaybookTasks } from '@/lib/planner/queries';
+import { asCampaignPlatform, asCampaignObjective } from '@/lib/validators';
 
 // --- small helpers ------------------------------------------------------
 
@@ -672,10 +673,10 @@ export async function regenerateCaption(
   });
 
   const prompt = buildCaptionPrompt({
-    platform: post.platform,
+    platform: asCampaignPlatform(post.platform),
     campaign: {
       name: campaign.name,
-      objective: campaign.objective,
+      objective: asCampaignObjective(campaign.objective),
       brief: campaign.brief,
       audience: campaign.audience,
     },

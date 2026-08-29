@@ -107,7 +107,7 @@ export function buildProfilePatch(
     default: {
       // Exhaustiveness guard: TypeScript will flag this if `ProfileKey` grows
       // a value with no case above.
-      const _never: never = profileKey;
+      const _never: never = profileKey as never;
       return _never;
     }
   }

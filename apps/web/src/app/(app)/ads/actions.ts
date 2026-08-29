@@ -236,7 +236,7 @@ export async function changeAdStatus(
     };
   }
 
-  const platform = await applyPlatformStatus(supabase, ad, target);
+  const platform = await applyPlatformStatus(supabase, { ...ad, platform: ad.platform as 'meta' | 'google' | 'tiktok' }, target);
   if (!platform.ok) return platform;
 
   const { error } = await supabase

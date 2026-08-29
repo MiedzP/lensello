@@ -124,7 +124,7 @@ export async function requestPasscodeReset(
   if (!account) return generic;
 
   const invite = await issuePortalInvite(admin, account.client_id, email);
-  if (!invite.ok) {
+  if (invite.ok === false) {
     console.error('[portal] could not issue a reset token', invite.error);
     return generic;
   }

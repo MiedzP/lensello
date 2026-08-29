@@ -7,6 +7,7 @@ import { GIG_STATUS_LABELS, SHOOT_TYPE_LABELS, formatCents } from '@lensello/cor
 import { integrationStatus } from '@lensello/core/integrations';
 import { Badge, Button, Card, CardBody, CardHeader, PageHeader } from '@/components/ui';
 import { getSession, requireUserOrRedirect } from '@/lib/auth';
+import { asGigStatus, asContractStatus } from '@/lib/validators';
 import {
   getGig,
   getShootForGig,
@@ -66,7 +67,7 @@ export default async function GigDetailPage(props: PageProps<'/gigs/[gigId]'>) {
   const contracts: ContractRowView[] = (contractRows ?? []).map((row) => ({
     id: row.id,
     title: row.title,
-    status: row.status,
+    status: asContractStatus(row.status),
     sentAt: row.sent_at,
     acceptedAt: row.accepted_at,
     acceptedName: row.accepted_name,
@@ -155,7 +156,7 @@ export default async function GigDetailPage(props: PageProps<'/gigs/[gigId]'>) {
         <div className="space-y-6">
           <StatusPanel
             gigId={gig.id}
-            status={gig.status}
+            status={asGigStatus(gig.status)}
             hasCalendarEvent={gig.calendar_event_id !== null}
             calendarStatus={integrationStatus().calendar}
           />
@@ -196,7 +197,7 @@ export default async function GigDetailPage(props: PageProps<'/gigs/[gigId]'>) {
 
           <ShootPanel
             gigId={gig.id}
-            status={gig.status}
+            status={asGigStatus(gig.status)}
             shoot={shoot}
             candidates={shootCandidates}
             shotAtLabel={dateLabel(shoot?.shot_at ?? null)}

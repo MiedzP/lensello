@@ -30,6 +30,7 @@ import {
   readAccessToken,
   type SocialAccountRow,
 } from './queries';
+import { asCampaignPlatform } from '@/lib/validators';
 
 type Supabase = Session['supabase'];
 type Admin = ReturnType<typeof createAdminClient>;
@@ -189,7 +190,7 @@ export async function syncSocialMessages(
   admin: Admin,
   account: SocialAccountRow,
 ): Promise<SocialSyncResult> {
-  const platform = account.platform;
+  const platform = asCampaignPlatform(account.platform) as SocialPlatform;
   const accessToken = await readAccessToken(admin, account.id);
 
   if (!accessToken) {

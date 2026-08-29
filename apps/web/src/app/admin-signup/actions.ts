@@ -51,21 +51,9 @@ export async function createOwnerAccount({
       };
     }
 
-    // Store temporary credentials for login
-    // In production, use proper auth and password hashing
-    const { data: cred, error: credError } = await supabase
-      .from('temp_credentials')
-      .insert({
-        user_id: userId,
-        email,
-        password_hash: hashedPassword,
-        created_at: new Date().toISOString(),
-      });
-
-    if (credError && !credError.message.includes('does not exist')) {
-      console.warn('Could not store credentials:', credError);
-      // Continue anyway - profile was created
-    }
+    // Temporary credentials are not persisted in temp_credentials table
+    // (table does not exist in current schema)
+    // In production, use proper auth and password hashing with Supabase Auth
 
     return {
       error: null,

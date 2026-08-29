@@ -14,6 +14,7 @@ import {
   type DisplayStyle,
 } from '@/lib/galleries/queries';
 import { accessProblem } from '@/lib/galleries/tokens';
+import { asGalleryLayout } from '@/lib/validators';
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -102,7 +103,7 @@ export async function listPortalGalleries(
       title: gallery.title || shoot.title,
       shootTitle: shoot.title,
       shotAt: shoot.shot_at,
-      displayStyle: gallery.display_style,
+      displayStyle: asGalleryLayout(gallery.display_style) as DisplayStyle,
       accentColor: gallery.accent_color,
       coverUrl: path ? urlByPath.get(path) ?? null : null,
       isClosed: accessProblem(gallery) !== null,

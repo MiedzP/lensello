@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { CalendarClock, Images, StickyNote } from 'lucide-react';
 import { Badge, Card, CardBody, CardHeader } from '@/components/ui';
 import { CLIENT_STAGE_LABELS, GIG_STATUS_LABELS } from '@lensello/core';
+import { asClientStage } from '@/lib/validators';
 import { CLIENT_SOURCE_LABELS, CLIENT_STAGE_TONES } from '@/lib/clients/stages';
 import { shortDate } from '@/lib/clients/format';
 import type { ConversationDetail } from '@/lib/conversations/queries';
@@ -44,7 +45,7 @@ export function CrmPanel({ detail }: { detail: ConversationDetail }) {
             </Badge>
           </div>
 
-          <StageControl clientId={client.id} stage={client.stage} />
+          <StageControl clientId={client.id} stage={asClientStage(client.stage)} />
 
           {client.notes ? (
             <div className="flex items-start gap-2 text-xs text-muted">

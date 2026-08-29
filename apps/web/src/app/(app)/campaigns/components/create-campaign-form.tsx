@@ -28,6 +28,7 @@ import type { CampaignPlaybookRow } from '@/lib/planner/types';
 import { SEASON_LABELS, WEEKDAY_OPTIONS, sortSeasons } from '@/lib/planner/display';
 import { sanitizePostingDays } from '@/lib/planner/dates';
 import { createCampaign } from '../actions';
+import { asCampaignTag } from '@/lib/validators';
 
 const POST_COUNTS = Array.from(
   { length: MAX_POST_COUNT - MIN_POST_COUNT + 1 },
@@ -59,7 +60,7 @@ export function CreateCampaignForm({
     [playbooks],
   );
   const seasons = useMemo(
-    () => sortSeasons([...new Set(playbooks.map((p) => p.season))]),
+    () => sortSeasons([...new Set(playbooks.map((p) => asCampaignTag(p.season)))]),
     [playbooks],
   );
 

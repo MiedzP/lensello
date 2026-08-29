@@ -18,6 +18,7 @@
 import { getDriveSource } from '@lensello/core/integrations';
 import type { Session } from '@/lib/auth';
 import type { Tables, TablesInsert } from '@/lib/db.types';
+import { asImportFileStatus } from '@/lib/validators';
 import {
   BATCH_FILE_LIMIT,
   BATCH_TIME_BUDGET_MS,
@@ -288,7 +289,7 @@ export async function runImportBatch(
     width: row.width,
     height: row.height,
     modifiedTime: row.modified_time,
-    status: row.status,
+    status: asImportFileStatus(row.status),
     attempts: row.attempts,
   }));
 
@@ -378,8 +379,13 @@ export async function runImportBatch(
 
   if (finalError) throw new Error(`Could not re-check import progress: ${finalError.message}`);
 
-  const counts = summarizeCounts(finalRows ?? []);
-  const hasRetryable = (finalRows ?? []).some(
+  const validatedFinalRows = (finalRows ?? []).map((row) => ({
+    ...row,
+    status: asImportFileStatus(row.status),
+  }));
+
+  const counts = summarizeCounts(validatedFinalRows);
+  const hasRetryable = validatedFinalRows.some(
     (row) => row.status === 'failed' && row.attempts < MAX_IMPORT_ATTEMPTS,
   );
   const status = nextJobStatus(counts, hasRetryable);

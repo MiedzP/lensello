@@ -237,8 +237,8 @@ export async function listShoots(
     return {
       id: shoot.id,
       title: shoot.title,
-      type: shoot.type,
-      status: shoot.status,
+      type: isShootType(shoot.type) ? shoot.type : ('portrait' as ShootType),
+      status: isShootStatus(shoot.status) ? shoot.status : ('planned' as ShootStatus),
       shotAt: shoot.shot_at,
       location: shoot.location,
       clientName: shoot.client_id ? (clientNameById.get(shoot.client_id) ?? null) : null,

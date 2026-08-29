@@ -842,6 +842,19 @@ export type Database = {
           current_booking_rate: number | null
           customer_journey: Json | null
           desired_monthly_bookings: number | null
+          diagnostic_position_status: 'red' | 'amber' | 'green' | null
+          diagnostic_position_insight: string | null
+          diagnostic_product_status: 'red' | 'amber' | 'green' | null
+          diagnostic_product_insight: string | null
+          diagnostic_visibility_status: 'red' | 'amber' | 'green' | null
+          diagnostic_visibility_insight: string | null
+          diagnostic_conversion_status: 'red' | 'amber' | 'green' | null
+          diagnostic_conversion_insight: string | null
+          diagnostic_nurture_status: 'red' | 'amber' | 'green' | null
+          diagnostic_nurture_insight: string | null
+          diagnostic_performance_status: 'red' | 'amber' | 'green' | null
+          diagnostic_performance_insight: string | null
+          diagnostic_last_assessed: string | null
           desired_work_types: string | null
           elevate_google_rating: number | null
           elevate_portfolio_shoot_count: number | null
@@ -891,6 +904,19 @@ export type Database = {
           customer_journey?: Json | null
           desired_monthly_bookings?: number | null
           desired_work_types?: string | null
+          diagnostic_position_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_position_insight?: string | null
+          diagnostic_product_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_product_insight?: string | null
+          diagnostic_visibility_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_visibility_insight?: string | null
+          diagnostic_conversion_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_conversion_insight?: string | null
+          diagnostic_nurture_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_nurture_insight?: string | null
+          diagnostic_performance_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_performance_insight?: string | null
+          diagnostic_last_assessed?: string | null
           elevate_google_rating?: number | null
           elevate_portfolio_shoot_count?: number | null
           elevate_positioning_clarity?: string | null
@@ -939,6 +965,19 @@ export type Database = {
           customer_journey?: Json | null
           desired_monthly_bookings?: number | null
           desired_work_types?: string | null
+          diagnostic_position_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_position_insight?: string | null
+          diagnostic_product_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_product_insight?: string | null
+          diagnostic_visibility_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_visibility_insight?: string | null
+          diagnostic_conversion_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_conversion_insight?: string | null
+          diagnostic_nurture_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_nurture_insight?: string | null
+          diagnostic_performance_status?: 'red' | 'amber' | 'green' | null
+          diagnostic_performance_insight?: string | null
+          diagnostic_last_assessed?: string | null
           elevate_google_rating?: number | null
           elevate_portfolio_shoot_count?: number | null
           elevate_positioning_clarity?: string | null

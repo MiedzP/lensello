@@ -4,6 +4,7 @@ import { AiError, generateJson, isAiConfigured } from '@/lib/ai';
 import type { Session } from '@/lib/auth';
 import type { TablesInsert } from '@/lib/db.types';
 import { isLabelKind, isUuid, type LabelKind } from './constants';
+import { asLabelSource } from '@/lib/validators';
 
 /**
  * The captioning pass: writes `assets.ai_caption` and `asset_ai_labels`.
@@ -235,7 +236,12 @@ export async function runCaptioningBatch(
       .select('label, source')
       .eq('asset_id', asset.id);
 
-    const plan = partitionLabelsAgainstManual(existingRows ?? [], result.labels);
+    const validatedRows: ExistingLabelRow[] = (existingRows ?? []).map((row) => ({
+      label: row.label,
+      source: asLabelSource(row.source),
+    }));
+
+    const plan = partitionLabelsAgainstManual(validatedRows, result.labels);
     labelsPreserved += plan.preserved.length;
 
     if (plan.toWrite.length > 0) {

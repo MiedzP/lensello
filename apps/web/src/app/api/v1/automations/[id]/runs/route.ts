@@ -14,7 +14,7 @@ const LIMIT = 20;
 
 export async function GET(request: Request, context: RouteContext<'/api/v1/automations/[id]/runs'>) {
   const auth = await authenticateApiRequest(request, 'automations:read');
-  if (!auth.ok) return auth.response;
+  if (auth.ok === false) return auth.response;
 
   const { id } = await context.params;
   if (!z.uuid().safeParse(id).success) {

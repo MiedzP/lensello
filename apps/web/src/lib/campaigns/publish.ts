@@ -16,6 +16,7 @@ import { getIntegrations } from '@lensello/core/integrations';
 import type { PostStatus } from '@lensello/core';
 import type { Tables } from '@/lib/db.types';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { asCampaignPlatform } from '@/lib/validators';
 import {
   getPublishableAccount,
   readAccessToken,
@@ -110,7 +111,7 @@ export async function publishOnePost(
   // An unlinked platform is the same class of problem: an environment gap, not
   // a content one, so the post keeps its status and stays publishable once the
   // account is linked on /connections.
-  const account = await getPublishableAccount(db, post.platform);
+  const account = await getPublishableAccount(db, asCampaignPlatform(post.platform));
   if (!account) {
     return {
       ok: false,
@@ -128,7 +129,7 @@ export async function publishOnePost(
 
   try {
     const result = await social.publish({
-      platform: post.platform,
+      platform: asCampaignPlatform(post.platform),
       caption: post.caption,
       hashtags: post.hashtags,
       imageUrls,

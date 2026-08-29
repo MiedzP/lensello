@@ -4,6 +4,7 @@ import { notFound, redirect } from 'next/navigation';
 import { Camera } from 'lucide-react';
 import { SHOOT_TYPE_LABELS } from '@lensello/core';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { asGalleryLayout } from '@/lib/validators';
 import { listGalleryPhotos, resolveGalleryForClient } from '@/lib/galleries/queries';
 import { listGallerySections } from '@/lib/galleries/sections';
 import { PORTAL_COOKIE_NAME, readPortalSession } from '@/lib/portal/session';
@@ -102,7 +103,7 @@ export default async function PortalGalleryPage(props: PageProps<'/portal/galler
             galleryId={gallery.id}
             photos={photos}
             sections={sections}
-            displayStyle={gallery.display_style}
+            displayStyle={asGalleryLayout(gallery.display_style)}
             accentColor={gallery.accent_color}
             approved={approval !== null}
             allowDownloads={gallery.allow_downloads}

@@ -130,7 +130,7 @@ export async function toggleFavourite(
   formData: FormData,
 ): Promise<GalleryState> {
   const auth = await authorize(formData.get('token'));
-  if (!auth.ok) return { error: auth.error, message: null };
+  if (auth.ok === false) return { error: auth.error, message: null };
 
   const { admin, resolved } = auth;
 
@@ -188,7 +188,7 @@ export async function approveSelection(
   formData: FormData,
 ): Promise<GalleryState> {
   const auth = await authorize(formData.get('token'));
-  if (!auth.ok) return { error: auth.error, message: null };
+  if (auth.ok === false) return { error: auth.error, message: null };
 
   const { admin, resolved } = auth;
 

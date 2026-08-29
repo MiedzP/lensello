@@ -17,10 +17,29 @@ export default async function AdminUsersPage() {
   }
 
   // Fetch all users
-  const { data: users } = await supabase
+  const { data: rows } = await supabase
     .from('profiles')
     .select('*')
     .order('created_at', { ascending: false });
 
-  return <AdminUsersView users={users || []} />;
+  // Map to User type - profiles table doesn't have email column, so we use empty string as placeholder
+  interface User {
+    id: string;
+    full_name: string;
+    email: string;
+    role: 'owner' | 'staff';
+    created_at: string;
+    onboarding_completed: boolean;
+  }
+
+  const users: User[] = (rows || []).map((row) => ({
+    id: row.id,
+    full_name: row.full_name,
+    email: '', // profiles table doesn't have email column
+    role: row.role as 'owner' | 'staff',
+    created_at: row.created_at,
+    onboarding_completed: row.onboarding_completed,
+  }));
+
+  return <AdminUsersView users={users} />;
 }

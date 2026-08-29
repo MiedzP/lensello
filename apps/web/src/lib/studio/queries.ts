@@ -4,6 +4,7 @@ import type { Tables } from '@/lib/db.types';
 import { PHOTOS_BUCKET, PREVIEW_URL_TTL_SECONDS, signPhotoUrls } from '@/lib/campaigns/queries';
 import { isLabelKind, isUuid, type LabelKind } from './constants';
 import type { CandidateAsset, GeneratedImageView, ShortlistItemView } from './types';
+import { asApprovalStatus } from '@/lib/validators';
 
 /**
  * Read helpers for the studio module.
@@ -280,7 +281,7 @@ export async function getShortlist(db: Db, requestId: string): Promise<Shortlist
       rank: row.rank,
       rationale: row.rationale,
       score: row.score,
-      decision: row.decision,
+      decision: asApprovalStatus(row.decision),
       filename: asset?.filename ?? 'Deleted photo',
       altText: asset?.alt_text ?? null,
       url: asset ? urls.get(asset.storage_path) ?? null : null,
@@ -309,7 +310,7 @@ export async function getGeneratedImages(db: Db, requestId: string): Promise<Gen
     model: row.model,
     width: row.width,
     height: row.height,
-    decision: row.decision,
+    decision: asApprovalStatus(row.decision),
     assetId: row.asset_id,
     createdAt: row.created_at,
     url: urls.get(row.storage_path) ?? null,

@@ -56,7 +56,7 @@ function parseCrop(raw: FormDataEntryValue | null): CropRect | null {
 
 export async function addToBasket(_previous: ShopState, formData: FormData): Promise<ShopState> {
   const auth = await authorizeShopToken(formData.get('token'));
-  if (!auth.ok) return { ...SHOP_IDLE, error: auth.error };
+  if (auth.ok === false) return { ...SHOP_IDLE, error: auth.error };
   const { admin, resolved } = auth;
   const galleryId = resolved.gallery.id;
 
@@ -92,7 +92,7 @@ export async function addToBasket(_previous: ShopState, formData: FormData): Pro
 
 export async function updateBasketQuantity(_previous: ShopState, formData: FormData): Promise<ShopState> {
   const auth = await authorizeShopToken(formData.get('token'));
-  if (!auth.ok) return { ...SHOP_IDLE, error: auth.error };
+  if (auth.ok === false) return { ...SHOP_IDLE, error: auth.error };
   const { admin, resolved } = auth;
 
   const store = await cookies();
@@ -117,7 +117,7 @@ export async function updateBasketQuantity(_previous: ShopState, formData: FormD
 
 export async function removeFromBasket(_previous: ShopState, formData: FormData): Promise<ShopState> {
   const auth = await authorizeShopToken(formData.get('token'));
-  if (!auth.ok) return { ...SHOP_IDLE, error: auth.error };
+  if (auth.ok === false) return { ...SHOP_IDLE, error: auth.error };
   const { admin, resolved } = auth;
 
   const store = await cookies();
@@ -152,7 +152,7 @@ const detailsSchema = z.object({
 
 export async function saveDetailsAndCheckout(_previous: ShopState, formData: FormData): Promise<ShopState> {
   const auth = await authorizeShopToken(formData.get('token'));
-  if (!auth.ok) return { ...SHOP_IDLE, error: auth.error };
+  if (auth.ok === false) return { ...SHOP_IDLE, error: auth.error };
   const { admin, resolved } = auth;
   const token = formData.get('token') as string;
 

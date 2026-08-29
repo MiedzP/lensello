@@ -157,7 +157,7 @@ export default async function BusinessProfilePage() {
           <CardHeader title="Customer journey" />
           <CardBody>
             <ProfileJourneyEditor
-              value={(profile?.customer_journey as CustomerJourneyStage[] | null) ?? null}
+              value={(profile?.customer_journey as unknown as CustomerJourneyStage[] | null) ?? null}
               worksheetHref={worksheetHref('customer_journey')}
             />
           </CardBody>

@@ -12,6 +12,7 @@ import type { Session } from '@/lib/auth';
 import type { Tables } from '@/lib/db.types';
 import type { createAdminClient } from '@/lib/supabase/admin';
 import type { PlatformLink, PlatformLinks } from './links';
+import { asPlatformLinkStatus } from '@/lib/validators';
 
 type Supabase = Session['supabase'];
 type Admin = ReturnType<typeof createAdminClient>;
@@ -91,7 +92,7 @@ export async function listPlatformLinks(supabase: Supabase): Promise<PlatformLin
         {
           platform,
           handle: account?.handle ?? null,
-          status: account ? account.status : ('unlinked' as const),
+          status: account ? asPlatformLinkStatus(account.status) : ('unlinked' as const),
           canPublish: account?.status === 'connected' && account.can_publish,
         } satisfies PlatformLink,
       ];

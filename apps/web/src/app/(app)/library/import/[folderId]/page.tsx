@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ChevronLeft, ImageOff } from 'lucide-react';
 import { EmptyState, ErrorNote, PageHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
+import { asFileStatus } from '@/lib/validators';
 import { isPlausibleDriveId } from '@/lib/drive/constants';
 import {
   findSharedFolder,
@@ -55,7 +56,7 @@ export default async function ImportFolderPage(
   const statuses: Record<string, FileStatusProps> = {};
   for (const [driveFileId, status] of statusMap) {
     statuses[driveFileId] = {
-      status: status.status,
+      status: asFileStatus(status.status),
       attempts: status.attempts,
       error: status.error,
     };

@@ -186,7 +186,7 @@ export async function listConversations(
         conversation,
         clientId: client.id,
         clientName: client.name,
-        clientStage: client.stage,
+        clientStage: client.stage as ClientStage,
         previewSubject: preview?.subject ?? null,
         previewBody: preview?.body ?? null,
         assignedToName: conversation.assigned_to

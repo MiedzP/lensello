@@ -55,7 +55,7 @@ export async function toggleFavouritePortal(
   formData: FormData,
 ): Promise<PortalGalleryState> {
   const auth = await authorize(formData.get('galleryId'));
-  if (!auth.ok) return { error: auth.error, message: null };
+  if (auth.ok === false) return { error: auth.error, message: null };
 
   const { admin, resolved } = auth;
 
@@ -111,7 +111,7 @@ export async function approveSelectionPortal(
   formData: FormData,
 ): Promise<PortalGalleryState> {
   const auth = await authorize(formData.get('galleryId'));
-  if (!auth.ok) return { error: auth.error, message: null };
+  if (auth.ok === false) return { error: auth.error, message: null };
 
   const { admin, resolved } = auth;
 

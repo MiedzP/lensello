@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const auth = await authenticateApiRequest(request, 'automations:read');
-  if (!auth.ok) return auth.response;
+  if (auth.ok === false) return auth.response;
 
   const admin = createAdminClient();
   const { data, error } = await admin

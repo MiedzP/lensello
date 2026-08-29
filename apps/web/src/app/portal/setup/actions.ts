@@ -48,7 +48,7 @@ export async function submitPasscode(
   const admin = createAdminClient();
   const result = await completeSetup(admin, parsed.data.token, parsed.data.passcode);
 
-  if (!result.ok) {
+  if (result.ok === false) {
     return { ...PORTAL_IDLE, error: result.error };
   }
 

@@ -15,6 +15,7 @@
 import type { Session } from '@/lib/auth';
 import type { Tables } from '@/lib/db.types';
 import type { createAdminClient } from '@/lib/supabase/admin';
+import { asStaffRole } from '@/lib/validators';
 
 type Supabase = Session['supabase'];
 type Admin = ReturnType<typeof createAdminClient>;
@@ -87,7 +88,7 @@ export async function listStaff(
       id: profile.id,
       fullName: profile.full_name.trim() || 'Unnamed',
       email: authUser?.email ?? null,
-      role: profile.role,
+      role: asStaffRole(profile.role, null as any),
       addedAt: profile.created_at,
       lastSignInAt: authUser?.lastSignInAt ?? null,
       isProvisioned: true,

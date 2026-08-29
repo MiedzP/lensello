@@ -82,7 +82,7 @@ export async function listUnhandledInbound(
         clientId: client.id,
         clientName: client.name,
         clientEmail: client.email,
-        clientStage: client.stage,
+        clientStage: client.stage as ClientStage,
       },
     ];
   });

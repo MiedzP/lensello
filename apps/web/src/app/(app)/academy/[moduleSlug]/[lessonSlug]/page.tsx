@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Clock, FileEdit } from 'lucide-react';
 import { Card, CardBody, CardHeader } from '@/components/ui';
 import { requireUserOrRedirect } from '@/lib/auth';
+import { asLessonStatus } from '@/lib/validators';
 import { renderLessonMarkdown } from '@/lib/academy/markdown';
 import {
   getLessonBySlug,
@@ -110,7 +111,7 @@ export default async function AcademyLessonPage(
       )}
 
       <div className="mt-8">
-        <ProgressControl lessonId={lesson.id} status={progress?.status ?? null} />
+        <ProgressControl lessonId={lesson.id} status={progress?.status ? asLessonStatus(progress.status) : null} />
       </div>
 
       {worksheets.length > 0 ? (

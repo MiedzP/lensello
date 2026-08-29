@@ -356,7 +356,7 @@ export async function sendPortalInvite(
   }
 
   const invite = await issuePortalInvite(supabase, parsed.data.clientId, parsed.data.email);
-  if (!invite.ok) {
+  if (invite.ok === false) {
     return { ...GALLERY_ADMIN_IDLE, error: invite.error };
   }
 
