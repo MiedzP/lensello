@@ -80,20 +80,39 @@ export async function signUp(
   }
 
   const email = parsed.data.email.toLowerCase();
-  const admin = createAdminClient();
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'unknown error';
+    console.error('Failed to create admin client:', errorMsg);
+    return { error: `Admin client error: ${errorMsg}` };
+  }
 
   // email_confirm: true because there is no transactional mail provider wired
   // up yet — a confirmation link would never arrive and the account would be
   // stranded. Revisit when live mail exists.
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
-    password: parsed.data.password,
-    email_confirm: true,
-    user_metadata: { full_name: parsed.data.fullName },
-  });
+  let created;
+  let createError;
+  try {
+    const response = await admin.auth.admin.createUser({
+      email,
+      password: parsed.data.password,
+      email_confirm: true,
+      user_metadata: { full_name: parsed.data.fullName },
+    });
+    created = response.data;
+    createError = response.error;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'unknown error';
+    console.error('Signup auth creation exception:', errorMsg, err);
+    return { error: `Failed to create account: ${errorMsg}` };
+  }
 
   if (createError || !created.user) {
     const message = createError?.message ?? '';
+    console.error('Signup auth creation error:', { createError, message });
     if (/already|exists|registered/i.test(message)) {
       return { error: 'An account with that email already exists. Sign in instead.' };
     }
