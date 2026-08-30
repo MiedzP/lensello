@@ -48,6 +48,8 @@ const PUBLIC_PATHS = [
   // Same for provider webhooks, which authenticate with their own shared
   // secret and likewise fail closed when it is missing.
   '/api/webhooks',
+  // Debug endpoint for testing connectivity
+  '/api/test-connection',
 ];
 
 /** Signed-in visitors have no use for these and are sent to the dashboard. */
