@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import Link from 'next/link';
 import { Button, Field, Input, ErrorNote } from '@/components/ui';
 import { signIn, type LoginState } from './actions';
 
@@ -26,15 +27,20 @@ export function LoginForm({ next }: { next: string }) {
         />
       </Field>
 
-      <Field label="Password" htmlFor="password" required>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
-      </Field>
+      <div className="space-y-1">
+        <Field label="Password" htmlFor="password" required>
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+          />
+        </Field>
+        <Link href="/forgot-password" className="inline-block text-xs text-blue-600 hover:text-blue-700 font-medium">
+          Forgot password?
+        </Link>
+      </div>
 
       <Button type="submit" variant="primary" size="lg" className="w-full" disabled={pending}>
         {pending ? 'Signing in…' : 'Sign in'}

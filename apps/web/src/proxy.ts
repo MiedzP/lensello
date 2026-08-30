@@ -16,6 +16,7 @@ import { createServerClient } from '@supabase/ssr';
 const PUBLIC_PATHS = [
   '/login',
   '/signup',
+  '/forgot-password',
   // Invitation links. The person opening one has no account yet — that is
   // what they are for.
   '/join',
@@ -50,7 +51,7 @@ const PUBLIC_PATHS = [
 ];
 
 /** Signed-in visitors have no use for these and are sent to the dashboard. */
-const SIGNED_OUT_ONLY = ['/login', '/signup'];
+const SIGNED_OUT_ONLY = ['/login', '/signup', '/forgot-password'];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
