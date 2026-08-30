@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import DiagnosticView from './components/diagnostic-view';
 import type { DiagnosticAssessment } from '@/lib/lens/diagnostic';
 
+export const dynamic = 'force-dynamic'; // Always dynamic - requires auth session
 export const metadata = {
   title: 'Marketing Diagnostic - Lensello',
 };
