@@ -1,107 +1,88 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
+import { jwtVerify } from 'jose';
 
 /**
  * Renamed from `middleware` in Next.js 16 — the file must be `proxy.ts` and the
  * export must be named `proxy`. Node.js runtime only; `edge` is unsupported here.
  *
- * Two jobs: refresh the Supabase session cookie (Server Components can't set
- * cookies, so it has to happen here), and bounce unauthenticated visitors to
- * the login page.
+ * With custom JWT auth, the proxy simply:
+ * 1. Check if the user has a valid JWT token (no refresh needed)
+ * 2. Bounce unauthenticated visitors to the login page
  *
- * This is a convenience gate, not a security boundary. RLS is what actually
- * protects data.
+ * No more calls to Supabase auth API. This is a convenience gate, not a security
+ * boundary. RLS is what actually protects data.
  */
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+const COOKIE_NAME = 'auth-token';
+const key = new TextEncoder().encode(JWT_SECRET);
 
 const PUBLIC_PATHS = [
   '/login',
   '/signup',
   '/forgot-password',
-  // Invitation links. The person opening one has no account yet — that is
-  // what they are for.
+  '/reset-password',
+  // Invitation links
   '/join',
-  '/auth/callback',
   '/auth/error',
-  // The public enquiry form. Bouncing a prospective client to a login screen
-  // would lose the enquiry entirely.
+  // Public enquiry form
   '/inquire',
-  // Client galleries. Access is the unguessable token in the URL, not a
-  // session — asking a wedding couple to make an account to see their own
-  // photographs is how galleries go unseen.
+  // Client galleries and contracts (token-based, not session-based)
   '/g',
-  // Contract acceptance. Same reasoning as galleries: the client signing is
-  // not a user of the studio's workspace and must not be given a session.
   '/c',
-  // Where Stripe returns a client after checkout. They have no account.
+  // Stripe return
   '/paid',
-  // The client portal. A client signing in here gets a portal session scoped to
-  // their own record — deliberately not a Supabase session, which would put
-  // them inside the studio's RLS perimeter. It authenticates itself.
+  // Client portal (separate auth)
   '/portal',
-  // Public API, authenticated by an API key rather than a cookie. Refusing it
-  // here would bounce every key-holding caller to a login page.
+  // Public API (API-key auth)
   '/api/v1',
-  // Cron endpoints have no session to refresh and would be bounced to /login.
-  // They are not unprotected: each one checks CRON_SECRET itself and refuses
-  // to run when it is unset.
+  // Cron (CRON_SECRET auth)
   '/api/cron',
-  // Same for provider webhooks, which authenticate with their own shared
-  // secret and likewise fail closed when it is missing.
+  // Webhooks (provider secret auth)
   '/api/webhooks',
-  // Debug endpoint for testing connectivity
-  '/api/test-connection',
 ];
 
 /** Signed-in visitors have no use for these and are sent to the dashboard. */
-const SIGNED_OUT_ONLY = ['/login', '/signup', '/forgot-password'];
+const SIGNED_OUT_ONLY = ['/login', '/signup', '/forgot-password', '/reset-password'];
+
+/**
+ * Verify JWT from cookie
+ */
+async function verifyToken(token: string) {
+  try {
+    const verified = await jwtVerify(token, key);
+    return verified.payload;
+  } catch (err) {
+    return null;
+  }
+}
 
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          for (const { name, value } of cookiesToSet) {
-            request.cookies.set(name, value);
-          }
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
-          }
-        },
-      },
-    },
-  );
-
-  // Refreshes the auth token as a side effect. Must run before any redirect
-  // decision so an expiring session is renewed rather than bounced.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   const { pathname } = request.nextUrl;
+
+  // Check if path is public
   const isPublic = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 
+  // Get JWT from cookie
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  const user = token ? await verifyToken(token) : null;
+
+  // Redirect unauthenticated visitors to login (unless path is public)
   if (!user && !isPublic) {
     const loginUrl = new URL('/login', request.url);
-    // Preserve intent so login can return the user where they were headed.
     loginUrl.searchParams.set('next', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
+  // Redirect signed-in visitors away from auth-only pages
   if (user && SIGNED_OUT_ONLY.includes(pathname)) {
     return NextResponse.redirect(new URL('/', request.url));
   }
 
-  return response;
+  // Allow the request
+  return NextResponse.next();
 }
 
 export const config = {

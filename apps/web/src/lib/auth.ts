@@ -1,15 +1,60 @@
+/**
+ * Authentication utilities for custom JWT-based auth
+ *
+ * Replaces Supabase Auth with a custom JWT token system.
+ * Users are stored in public.users table with bcrypt-hashed passwords.
+ * Sessions are JWT tokens stored in httpOnly cookies.
+ */
+
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/auth/jwt';
 import type { Tables } from '@/lib/db.types';
 
 export interface Session {
-  user: { id: string; email: string | null };
+  user: { id: string; email: string };
   profile: Tables<'profiles'>;
   supabase: Awaited<ReturnType<typeof createClient>>;
 }
 
 /**
- * Resolves the caller, or throws.
+ * Get the current user's session from the JWT cookie
+ */
+export async function getSession(): Promise<Session | null> {
+  try {
+    const jwtUser = await getCurrentUser();
+
+    if (!jwtUser) {
+      return null;
+    }
+
+    const supabase = await createClient();
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', jwtUser.userId)
+      .maybeSingle();
+
+    if (!profile) {
+      return null;
+    }
+
+    return {
+      user: {
+        id: jwtUser.userId,
+        email: jwtUser.email,
+      },
+      profile,
+      supabase,
+    };
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Require authentication. Throws an error if no user is logged in.
  *
  * Call this at the top of EVERY Server Action. Server Actions are reachable by
  * direct POST — the fact that your UI only renders a button for staff proves
@@ -19,39 +64,13 @@ export interface Session {
  * reads as success to a programmatic caller.
  */
 export async function requireUser(): Promise<Session> {
-  const supabase = await createClient();
+  const session = await getSession();
 
-  // getUser() revalidates the JWT with Supabase. Do not substitute getSession(),
-  // which trusts an unverified cookie payload.
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
+  if (!session) {
     throw new Error('Unauthorized: no authenticated user.');
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  // Authenticated but not provisioned staff. RLS would deny every query
-  // anyway; failing here produces a comprehensible error instead of a
-  // confusing empty result set.
-  if (!profile) {
-    throw new Error(
-      'Forbidden: this account is not provisioned for the Lensello workspace.',
-    );
-  }
-
-  return {
-    user: { id: user.id, email: user.email ?? null },
-    profile,
-    supabase,
-  };
+  return session;
 }
 
 /**
@@ -59,11 +78,13 @@ export async function requireUser(): Promise<Session> {
  * Use in Server Components; use `requireUser` in Server Actions.
  */
 export async function requireUserOrRedirect(): Promise<Session> {
-  try {
-    return await requireUser();
-  } catch {
+  const session = await getSession();
+
+  if (!session) {
     redirect('/login');
   }
+
+  return session;
 }
 
 /**
@@ -73,19 +94,9 @@ export async function requireUserOrRedirect(): Promise<Session> {
 export async function requireUserOrRedirectWithOnboarding(): Promise<Session> {
   const session = await requireUserOrRedirect();
 
-  // Check if onboarding is completed
   if (!session.profile.onboarding_completed) {
     redirect('/onboarding');
   }
 
   return session;
-}
-
-/** Returns the session, or null. For UI that renders differently when signed out. */
-export async function getSession(): Promise<Session | null> {
-  try {
-    return await requireUser();
-  } catch {
-    return null;
-  }
 }

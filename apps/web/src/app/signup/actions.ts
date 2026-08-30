@@ -3,20 +3,14 @@
 import { timingSafeEqual } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
+import { hashPassword } from '@/lib/auth/password';
+import { createToken, setAuthCookie } from '@/lib/auth/jwt';
 
 export interface SignUpState {
   error: string | null;
 }
 
-/**
- * Longer than Supabase's default of six.
- *
- * Every provisioned account can read the entire client book — messages,
- * contact details, and gig pricing — so the floor is set by what the account
- * unlocks, not by what the auth provider will tolerate.
- */
 const MIN_PASSWORD_LENGTH = 12;
 
 const signUpSchema = z.object({
@@ -29,24 +23,13 @@ const signUpSchema = z.object({
   inviteCode: z.string().min(1, 'Enter the invite code.'),
 });
 
-/**
- * The invite code, or null when sign-up is switched off.
- *
- * Sign-up fails closed. An unset `LENSELLO_SIGNUP_CODE` disables the route
- * rather than opening it: the deployment is a public URL, and `is_staff()`
- * grants any profile row full access to the client book, so an
- * accidentally-open form would hand the studio's data to whoever finds it.
- */
 function expectedInviteCode(): string | null {
   return process.env.LENSELLO_SIGNUP_CODE?.trim() || null;
 }
 
-/** Constant-time compare, so the code cannot be recovered a character at a time. */
 function codeMatches(supplied: string, expected: string): boolean {
   const a = Buffer.from(supplied, 'utf8');
   const b = Buffer.from(expected, 'utf8');
-  // timingSafeEqual throws on a length mismatch, and the length itself is not
-  // the secret worth protecting.
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
@@ -80,80 +63,59 @@ export async function signUp(
   }
 
   const email = parsed.data.email.toLowerCase();
-
-  let admin;
-  try {
-    admin = createAdminClient();
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'unknown error';
-    console.error('Failed to create admin client:', errorMsg);
-    return { error: `Admin client error: ${errorMsg}` };
-  }
-
-  // email_confirm: true because there is no transactional mail provider wired
-  // up yet — a confirmation link would never arrive and the account would be
-  // stranded. Revisit when live mail exists.
-  let created;
-  let createError;
-  try {
-    const response = await admin.auth.admin.createUser({
-      email,
-      password: parsed.data.password,
-      email_confirm: true,
-      user_metadata: { full_name: parsed.data.fullName },
-    });
-    created = response.data;
-    createError = response.error;
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'unknown error';
-    console.error('Signup auth creation exception:', errorMsg, err);
-    return { error: `Failed to create account: ${errorMsg}` };
-  }
-
-  if (createError || !created.user) {
-    const message = createError?.message ?? '';
-    console.error('Signup auth creation error:', { createError, message });
-    if (/already|exists|registered/i.test(message)) {
-      return { error: 'An account with that email already exists. Sign in instead.' };
-    }
-    return { error: `The account could not be created: ${message || 'unknown error.'}` };
-  }
-
-  // The auth user alone cannot read anything — `requireUser` rejects a session
-  // with no profile row, and every RLS policy goes through `is_staff()`. The
-  // profile is what actually provisions the account.
-  const { error: profileError } = await admin.from('profiles').insert({
-    id: created.user.id,
-    full_name: parsed.data.fullName,
-    // Never 'owner'. Elevating an account is a deliberate act in the database,
-    // not something a form can grant itself.
-    role: 'staff',
-  });
-
-  if (profileError) {
-    // Roll the auth user back. Leaving it behind would create an account that
-    // can sign in, see nothing, and block the email from being retried.
-    await admin.auth.admin.deleteUser(created.user.id);
-    return {
-      error: `The account could not be provisioned: ${profileError.message}`,
-    };
-  }
-
-  // Sign the new account in on the cookie-bound client so they land in the app
-  // rather than on a login form asking for what they just typed.
   const supabase = await createClient();
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email,
-    password: parsed.data.password,
-  });
 
-  if (signInError) {
-    // The account is real and provisioned; only the session failed. Sending
-    // them to the login form is the accurate outcome — reporting a generic
-    // error here would imply nothing was created, and they would retry into
-    // an "email already exists".
-    redirect('/login');
+  try {
+    // Hash the password
+    const passwordHash = await hashPassword(parsed.data.password);
+
+    // Create user in users table
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .insert({
+        email,
+        password_hash: passwordHash,
+        full_name: parsed.data.fullName,
+      })
+      .select()
+      .single();
+
+    if (userError || !user) {
+      const message = userError?.message ?? '';
+      if (/unique|already|exists/i.test(message)) {
+        return { error: 'An account with that email already exists. Sign in instead.' };
+      }
+      console.error('User creation error:', userError);
+      return { error: `Failed to create account: ${message || 'unknown error'}` };
+    }
+
+    // Create profile to provision the account
+    const { error: profileError } = await supabase.from('profiles').insert({
+      user_id: user.id,
+      full_name: parsed.data.fullName,
+      role: 'staff', // Never 'owner' — that's a deliberate admin action
+    });
+
+    if (profileError) {
+      // Rollback: delete the user we just created
+      await supabase.from('users').delete().eq('id', user.id);
+      console.error('Profile creation error:', profileError);
+      return { error: `Account setup failed: ${profileError.message}` };
+    }
+
+    // Create JWT token and set cookie
+    const token = await createToken({
+      userId: user.id,
+      email: user.email,
+    });
+
+    await setAuthCookie(token);
+
+    // Redirect to dashboard
+    redirect('/');
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'unknown error';
+    console.error('Signup error:', errorMsg);
+    return { error: `Sign-up failed: ${errorMsg}` };
   }
-
-  redirect('/');
 }

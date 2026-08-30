@@ -3,7 +3,10 @@
 import type { Route } from 'next';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
+import { verifyPassword } from '@/lib/auth/password';
+import { createToken, setAuthCookie } from '@/lib/auth/jwt';
 
 export interface LoginState {
   error: string | null;
@@ -36,15 +39,39 @@ export async function signIn(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
-    email: parsed.data.email,
-    password: parsed.data.password,
-  });
+  const email = parsed.data.email.toLowerCase();
 
-  if (error) {
-    // Deliberately vague: distinguishing "no such user" from "wrong password"
-    // tells an attacker which emails are registered.
-    return { error: 'That email and password combination did not work.' };
+  try {
+    // Find user by email
+    const { data: user, error: queryError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (queryError || !user) {
+      // Deliberately vague for security
+      return { error: 'That email and password combination did not work.' };
+    }
+
+    // Verify password
+    const passwordMatch = await verifyPassword(parsed.data.password, user.password_hash);
+    if (!passwordMatch) {
+      return { error: 'That email and password combination did not work.' };
+    }
+
+    // Create JWT token
+    const token = await createToken({
+      userId: user.id,
+      email: user.email,
+    });
+
+    // Set auth cookie
+    await setAuthCookie(token);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error('Login error:', message);
+    return { error: 'Login failed. Please try again.' };
   }
 
   // `typedRoutes` wants a literal; the value is validated above as an in-app
@@ -53,7 +80,7 @@ export async function signIn(
 }
 
 export async function signOut(): Promise<void> {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  const cookieStore = await cookies();
+  cookieStore.delete('auth-token');
   redirect('/login');
 }
