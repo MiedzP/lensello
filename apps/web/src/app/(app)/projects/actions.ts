@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { getCurrentUser } from '@/lib/auth';
+import { requireUser } from '@/lib/auth';
 import {
   Project,
   ProjectStage,
@@ -56,12 +56,9 @@ class ValidationError extends ProjectError {
 
 // ===== Helper Functions =====
 
-async function requireUser() {
-  const user = await getCurrentUser();
-  if (!user) {
-    throw new UnauthorizedError('User not authenticated');
-  }
-  return user;
+async function getUserSession() {
+  const session = await requireUser();
+  return session;
 }
 
 async function getSupabaseClient() {
@@ -94,7 +91,7 @@ function calculateProgressPercentage(completed: number, total: number): number {
 
 export async function createProject(input: CreateProjectInput): Promise<Project> {
   try {
-    const user = await requireUser();
+    const session = await requireUser();
     const supabase = await getSupabaseClient();
 
     // Validate required fields
@@ -109,7 +106,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     const { data, error } = await supabase
       .from('projects')
       .insert({
-        user_id: user.id,
+        user_id: session.user.id,
         name: input.name.trim(),
         type: input.type,
         status: 'planning',
@@ -138,14 +135,14 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
 
 export async function getProject(projectId: string): Promise<Project> {
   try {
-    const user = await requireUser();
+    const session = await requireUser();
     const supabase = await getSupabaseClient();
 
     const { data, error } = await supabase
       .from('projects')
       .select()
       .eq('id', projectId)
-      .eq('user_id', user.id)
+      .eq('user_id', session.user.id)
       .single();
 
     if (error) {
@@ -171,7 +168,7 @@ export async function getProjectsList(
   },
 ): Promise<ProjectListResult> {
   try {
-    const user = await requireUser();
+    const session = await requireUser();
     const supabase = await getSupabaseClient();
     const page = filters?.page || 1;
     const pageSize = filters?.pageSize || 10;
@@ -180,7 +177,7 @@ export async function getProjectsList(
     let query = supabase
       .from('projects')
       .select('*', { count: 'exact' })
-      .eq('user_id', user.id);
+      .eq('user_id', session.user.id);
 
     if (filters?.status) {
       query = query.eq('status', filters.status);
@@ -215,7 +212,7 @@ export async function getProjectsList(
 
 export async function getProjectTimeline(projectId: string): Promise<ProjectTimeline> {
   try {
-    const user = await requireUser();
+    const session = await requireUser();
     const supabase = await getSupabaseClient();
 
     // Get project
@@ -684,13 +681,13 @@ export async function deleteTurnaroundMetric(metricId: string): Promise<void> {
 
 export async function getProjectDashboardStats(): Promise<ProjectDashboardStats> {
   try {
-    const user = await requireUser();
+    const session = await requireUser();
     const supabase = await getSupabaseClient();
 
     const { data: projects, error } = await supabase
       .from('projects')
       .select()
-      .eq('user_id', user.id);
+      .eq('user_id', session.user.id);
 
     if (error) {
       throw new ProjectError('DB_ERROR', `Failed to fetch stats: ${error.message}`);
