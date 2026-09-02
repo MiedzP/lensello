@@ -1,12 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { AlertCircle } from 'lucide-react';
+import { useTransition } from 'react';
+import { AlertCircle, LogIn } from 'lucide-react';
+import { Button } from '@/components/ui';
+import { demoLogin } from './actions';
 
 // DISABLED: Password authentication temporarily disabled
 // To re-enable: see apps/web/src/lib/auth/_disabled/README.md
 
 export function LoginForm({ next }: { next: string }) {
+  const [pending, startTransition] = useTransition();
+
+  const handleDemoLogin = () => {
+    startTransition(() => {
+      demoLogin(next);
+    });
+  };
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
@@ -15,11 +26,22 @@ export function LoginForm({ next }: { next: string }) {
           <div>
             <p className="font-medium text-yellow-900">Password authentication is temporarily disabled</p>
             <p className="text-sm text-yellow-800 mt-1">
-              Contact your studio owner to request access or enable alternative authentication methods.
+              Use the demo login below to access the app, or contact your studio owner for alternative methods.
             </p>
           </div>
         </div>
       </div>
+
+      <Button
+        onClick={handleDemoLogin}
+        disabled={pending}
+        variant="primary"
+        size="lg"
+        className="w-full"
+      >
+        <LogIn size={16} className="mr-2" />
+        {pending ? 'Signing in…' : 'Demo Login'}
+      </Button>
 
       {/*
       DISABLED PASSWORD FORM - Kept for reference

@@ -79,6 +79,65 @@ export async function signIn(
   redirect(parsed.data.next as Route);
 }
 
+export async function demoLogin(next?: string): Promise<void> {
+  const supabase = await createClient();
+  const redirectTo = (next && next.startsWith('/') && !next.startsWith('//')) ? next : '/';
+
+  try {
+    // Find or create demo user
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', 'demo@lensello.local')
+      .maybeSingle();
+
+    let userId: string;
+
+    if (existingUser) {
+      userId = existingUser.id;
+    } else {
+      // Create demo user if doesn't exist
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert({
+          email: 'demo@lensello.local',
+          password_hash: '', // Demo user has no password
+          full_name: 'Demo User',
+        })
+        .select()
+        .single();
+
+      if (createError || !newUser) {
+        throw new Error('Failed to create demo account');
+      }
+
+      userId = newUser.id;
+
+      // Create demo profile
+      await supabase.from('profiles').insert({
+        user_id: userId,
+        full_name: 'Demo User',
+        role: 'staff',
+      });
+    }
+
+    // Create JWT token for demo user
+    const token = await createToken({
+      userId,
+      email: 'demo@lensello.local',
+    });
+
+    // Set auth cookie
+    await setAuthCookie(token);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error('Demo login error:', message);
+    throw new Error('Demo login failed');
+  }
+
+  redirect(redirectTo as Route);
+}
+
 export async function signOut(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete('auth-token');
