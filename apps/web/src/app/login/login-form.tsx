@@ -1,22 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useTransition } from 'react';
+import { useActionState } from 'react';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui';
-import { demoLogin } from './actions';
+import { demoLogin, type LoginState } from './actions';
 
 // DISABLED: Password authentication temporarily disabled
 // To re-enable: see apps/web/src/lib/auth/_disabled/README.md
 
-export function LoginForm({ next }: { next: string }) {
-  const [pending, startTransition] = useTransition();
+const INITIAL: LoginState = { error: null };
 
-  const handleDemoLogin = () => {
-    startTransition(() => {
-      demoLogin(next);
-    });
-  };
+export function LoginForm({ next }: { next: string }) {
+  const [state, action, pending] = useActionState(
+    async () => {
+      await demoLogin(next);
+    },
+    INITIAL
+  );
 
   return (
     <div className="space-y-4">
@@ -32,16 +33,18 @@ export function LoginForm({ next }: { next: string }) {
         </div>
       </div>
 
-      <Button
-        onClick={handleDemoLogin}
-        disabled={pending}
-        variant="primary"
-        size="lg"
-        className="w-full"
-      >
-        <LogIn size={16} className="mr-2" />
-        {pending ? 'Signing in…' : 'Demo Login'}
-      </Button>
+      <form action={action}>
+        <Button
+          type="submit"
+          disabled={pending}
+          variant="primary"
+          size="lg"
+          className="w-full"
+        >
+          <LogIn size={16} className="mr-2" />
+          {pending ? 'Signing in…' : 'Demo Login'}
+        </Button>
+      </form>
 
       {/*
       DISABLED PASSWORD FORM - Kept for reference
