@@ -9,3 +9,4 @@ export {
   SkeletonList,
   ErrorNote,
 } from './feedback';
+export { Tooltip, TooltipIcon } from './tooltip';
