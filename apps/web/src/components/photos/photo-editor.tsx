@@ -5,7 +5,7 @@ import { useState, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { X, RotateCcw, Save, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button, Card, CardBody } from '@/components/ui';
+import { Button, Card, CardBody, Tooltip } from '@/components/ui';
 
 export interface EditState {
   brightness: number;
@@ -126,14 +126,16 @@ export function PhotoEditor({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       {/* Close button */}
-      <button
-        onClick={onCancel}
-        className="absolute right-4 top-4 rounded-md bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
-        aria-label="Close"
-        type="button"
-      >
-        <X size={24} aria-hidden="true" />
-      </button>
+      <Tooltip label="Close editor" side="left">
+        <button
+          onClick={onCancel}
+          className="absolute right-4 top-4 rounded-md bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+          aria-label="Close"
+          type="button"
+        >
+          <X size={24} aria-hidden="true" />
+        </button>
+      </Tooltip>
 
       <div className="flex h-full w-full gap-4 p-4 sm:h-auto sm:max-h-[90vh] sm:w-auto sm:p-6">
         {/* Image preview */}
@@ -157,24 +159,26 @@ export function PhotoEditor({
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">Edit Photo</h2>
             <div className="flex gap-1">
-              <button
-                onClick={undo}
-                disabled={historyIndex === 0}
-                className="rounded p-1.5 hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Undo"
-                type="button"
-              >
-                <RotateCcw size={16} className="scale-x-[-1]" aria-hidden="true" />
-              </button>
-              <button
-                onClick={redo}
-                disabled={historyIndex === history.length - 1}
-                className="rounded p-1.5 hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="Redo"
-                type="button"
-              >
-                <RotateCcw size={16} aria-hidden="true" />
-              </button>
+              <Tooltip label="Undo" side="bottom">
+                <button
+                  onClick={undo}
+                  disabled={historyIndex === 0}
+                  className="rounded p-1.5 hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  type="button"
+                >
+                  <RotateCcw size={16} className="scale-x-[-1]" aria-hidden="true" />
+                </button>
+              </Tooltip>
+              <Tooltip label="Redo" side="bottom">
+                <button
+                  onClick={redo}
+                  disabled={historyIndex === history.length - 1}
+                  className="rounded p-1.5 hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  type="button"
+                >
+                  <RotateCcw size={16} aria-hidden="true" />
+                </button>
+              </Tooltip>
             </div>
           </div>
 
